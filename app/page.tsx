@@ -1,33 +1,23 @@
 import { Mockup } from "@/components/ui/Mockup";
+import { Navbar } from "@/components/ui/Navbar";
 import { Download, Play, Search, Calendar, Heart } from "lucide-react";
 import Image from "next/image";
 
 export default function Home() {
   return (
     <main className="w-full flex-col flex overflow-hidden">
-      {/* Navbar - Glassmorphism */}
-      <nav className="fixed top-0 inset-x-0 z-50 px-6 py-4">
-        <div className="max-w-7xl mx-auto flex items-center justify-between glass-panel px-6 py-3 rounded-2xl ghost-border">
-          <div className="flex items-center gap-3">
-            <Image src="/assets/logo.png" alt="Mugen Logo" width={32} height={32} className="rounded-full" />
-            <span className="font-epilogue font-bold text-xl tracking-tight text-white">Mugen</span>
-          </div>
-          <div className="hidden md:flex items-center gap-8 text-[var(--on-surface-variant)] text-sm font-medium">
-            <a href="#features" className="hover:text-[var(--primary)] transition-colors">Features</a>
-            <a href="#discover" className="hover:text-[var(--primary)] transition-colors">Discover</a>
-            <a href="#download" className="hover:text-[var(--primary)] transition-colors">Download</a>
-          </div>
-          <button className="bg-gradient-to-br from-[var(--primary)] to-[var(--primary-container)] text-[var(--on-primary)] px-5 py-2 rounded-lg font-semibold text-sm hover:brightness-110 active:scale-95 transition-all outline-none">
-            Get the App
-          </button>
-        </div>
-      </nav>
+      <Navbar />
 
       {/* Hero Section */}
       <section className="relative pt-40 pb-20 px-6 min-h-screen flex items-center justify-center">
         {/* Abstract Background Elements */}
         <div className="absolute top-[10%] left-[20%] w-[600px] h-[600px] bg-[var(--primary)]/15 rounded-full blur-[120px] pointer-events-none -z-10 animate-pulse-glow"></div>
         <div className="absolute bottom-[20%] right-[15%] w-[500px] h-[500px] bg-[var(--tertiary)]/10 rounded-full blur-[120px] pointer-events-none -z-10 animate-pulse-glow-slow"></div>
+        
+        {/* Cinematic Floating Orbs */}
+        <div className="absolute top-[30%] left-[10%] w-12 h-12 bg-[var(--primary)]/30 rounded-full blur-xl animate-float-delayed pointer-events-none -z-5"></div>
+        <div className="absolute top-[60%] right-[5%] w-8 h-8 bg-[var(--tertiary)]/40 rounded-full blur-lg animate-float pointer-events-none -z-5"></div>
+        <div className="absolute bottom-[10%] left-[40%] w-16 h-16 bg-[var(--primary)]/20 rounded-full blur-2xl animate-float-delayed pointer-events-none -z-5" style={{ animationDuration: '8s' }}></div>
         
         <div className="max-w-7xl mx-auto w-full grid grid-cols-1 lg:grid-cols-2 gap-16 items-center z-10">
           <div className="flex flex-col items-center lg:items-start text-center lg:text-left gap-8 w-full">

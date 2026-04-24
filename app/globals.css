@@ -66,6 +66,10 @@
   --outline-variant: #40485c;
 }
 
+html {
+  scroll-behavior: smooth;
+}
+
 body {
   background-color: var(--surface);
   color: var(--on-surface);
