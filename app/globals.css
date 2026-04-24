@@ -1,26 +1,100 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
+  --color-background: var(--surface);
+  --color-foreground: var(--on-surface);
+  
+  --color-surface: var(--surface);
+  --color-surface-container-low: var(--surface-container-low);
+  --color-surface-container: var(--surface-container);
+  --color-surface-container-high: var(--surface-container-high);
+  --color-surface-container-highest: var(--surface-container-highest);
+  --color-surface-container-lowest: var(--surface-container-lowest);
+  --color-surface-variant: var(--surface-variant);
+  --color-surface-dim: var(--surface-dim);
+  --color-surface-bright: var(--surface-bright);
+  
+  --color-on-surface: var(--on-surface);
+  --color-on-surface-variant: var(--on-surface-variant);
+  
+  --color-primary: var(--primary);
+  --color-primary-container: var(--primary-container);
+  --color-on-primary: var(--on-primary);
+  
+  --color-tertiary: var(--tertiary);
+  --color-outline-variant: var(--outline-variant);
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+  --font-epilogue: var(--font-epilogue);
+  --font-inter: var(--font-inter);
+
+  --animate-float: float 6s ease-in-out infinite;
+  --animate-float-delayed: float 6s ease-in-out infinite 3s;
+  --animate-pulse-glow: pulse-glow 4s ease-in-out infinite;
+  --animate-pulse-glow-slow: pulse-glow 8s ease-in-out infinite;
+
+  @keyframes float {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-20px); }
+  }
+
+  @keyframes pulse-glow {
+    0%, 100% { opacity: 0.5; filter: blur(80px) brightness(1); transform: scale(1); }
+    50% { opacity: 0.8; filter: blur(100px) brightness(1.2); transform: scale(1.1); }
   }
 }
 
+:root {
+  --surface: #060e20;
+  --surface-container-lowest: #000000;
+  --surface-container-low: #091327;
+  --surface-container: #0c182e;
+  --surface-container-high: #141f37;
+  --surface-container-highest: #19253f;
+  --surface-variant: #19253f;
+  --surface-dim: #060e20;
+  --surface-bright: #1f2b48;
+
+  --on-surface: #dde5ff;
+  --on-surface-variant: #a3abc3;
+
+  --primary: #ba9eff;
+  --primary-container: #ac91f1;
+  --on-primary: #371975;
+
+  --tertiary: #ff97b5;
+
+  --outline-variant: #40485c;
+}
+
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background-color: var(--surface);
+  color: var(--on-surface);
+  font-family: var(--font-inter), sans-serif;
+}
+
+/* Base resets & Kinetic Canvas utilities */
+::selection {
+  background-color: var(--primary-container);
+  color: var(--on-surface);
+}
+
+.ghost-border {
+  border: 1px solid rgba(64, 72, 92, 0.15); /* outline-variant at 15% */
+}
+
+.ambient-shadow {
+  box-shadow: 0px 24px 48px rgba(0, 0, 0, 0.4);
+}
+
+.glass-panel {
+  background-color: rgba(25, 37, 63, 0.6); /* surface-variant at 60% */
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+}
+
+.text-gradient {
+  background: linear-gradient(135deg, var(--primary) 0%, var(--primary-container) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
 }
