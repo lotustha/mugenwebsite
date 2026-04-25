@@ -43,7 +43,7 @@ export function Navbar() {
           <a
             href="#features"
             className={`transition-colors ${
-              activeSection === "features" ? "text-[var(--primary)]" : "text-[var(--on-surface-variant)] hover:text-[var(--primary)]"
+              activeSection === "features" ? "text-primary" : "text-on-surface-variant hover:text-primary"
             }`}
           >
             Features
@@ -51,7 +51,7 @@ export function Navbar() {
           <a
             href="#discover"
             className={`transition-colors ${
-              activeSection === "discover" ? "text-[var(--primary)]" : "text-[var(--on-surface-variant)] hover:text-[var(--primary)]"
+              activeSection === "discover" ? "text-primary" : "text-on-surface-variant hover:text-primary"
             }`}
           >
             Discover
@@ -59,7 +59,7 @@ export function Navbar() {
           <a
             href="#download"
             className={`transition-colors ${
-              activeSection === "download" ? "text-[var(--primary)]" : "text-[var(--on-surface-variant)] hover:text-[var(--primary)]"
+              activeSection === "download" ? "text-primary" : "text-on-surface-variant hover:text-primary"
             }`}
           >
             Download
@@ -67,7 +67,7 @@ export function Navbar() {
         </div>
         <a 
           href="#download" 
-          className="bg-gradient-to-br from-[var(--primary)] to-[var(--primary-container)] text-[var(--on-primary)] px-5 py-2 rounded-lg font-semibold text-sm hover:brightness-110 active:scale-95 transition-all outline-none shadow-[0_0_15px_rgba(186,158,255,0.2)]"
+          className="bg-linear-to-br from-primary to-primary-container text-on-primary px-5 py-2 rounded-lg font-semibold text-sm hover:brightness-110 active:scale-95 transition-all outline-none shadow-[0_0_15px_rgba(186,158,255,0.2)]"
         >
           Get the App
         </a>
