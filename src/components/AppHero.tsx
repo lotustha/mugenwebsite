@@ -2,7 +2,6 @@
 
 import { motion } from "framer-motion";
 import Link from "next/link";
-import PlayStoreButton from "./PlayStoreButton";
 
 const ANIME_CARDS = [
   "from-pink-500/50 to-purple-600/50",
@@ -187,13 +186,6 @@ export default function AppHero() {
             animate={{ opacity: 1, x: 0 }}
             transition={{ duration: 0.7, ease: "easeOut" }}
           >
-            <div className="inline-flex items-center gap-2 px-4 py-2 liquid-glass rounded-full mb-8">
-              <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
-              <span className="font-body text-xs text-primary/90 tracking-widest uppercase font-semibold">
-                Free on Google Play
-              </span>
-            </div>
-
             <h1 className="font-headline text-5xl md:text-6xl xl:text-[4.5rem] font-extrabold text-text-main leading-[1.05] tracking-tight mb-6">
               Watch Anime{" "}
               <span className="text-gradient-primary">Without Limits</span>
@@ -221,7 +213,6 @@ export default function AppHero() {
 
             {/* CTA buttons */}
             <div className="flex flex-wrap gap-4 mb-8">
-              <PlayStoreButton text="Download Free" source="homepage_hero" />
               <Link
                 href="/anime"
                 className="inline-flex items-center gap-2 px-6 py-3 liquid-glass rounded-md font-headline font-semibold text-text-main border border-white/10 hover:border-primary/30 hover:bg-primary/5 transition-all duration-200 hover:scale-105 active:scale-95 cursor-pointer"

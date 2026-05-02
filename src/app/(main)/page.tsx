@@ -2,7 +2,6 @@ import { prisma } from "@/lib/prisma";
 import AppHero from "@/components/AppHero";
 import HomeAnimeSection from "./HomeAnimeSection";
 import HomeAppsSection from "./HomeAppsSection";
-import PlayStoreButton from "@/components/PlayStoreButton";
 import Link from "next/link";
 
 const APP_FEATURES = [
@@ -126,11 +125,6 @@ export default async function Home() {
             style={{ background: "radial-gradient(ellipse,rgba(139,92,246,0.12) 0%,transparent 70%)" }} />
         </div>
         <div className="relative max-w-2xl mx-auto px-4 text-center">
-          <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full mb-8 font-body text-xs font-semibold uppercase tracking-widest"
-            style={{ background: "rgba(139,92,246,0.12)", color: "rgba(186,158,255,0.9)", border: "1px solid rgba(139,92,246,0.25)" }}>
-            <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
-            Free on Google Play
-          </div>
           <h2 className="font-headline text-4xl md:text-5xl font-extrabold text-text-main mb-5 leading-tight">
             Start watching{" "}
             <span className="text-gradient-primary">free today</span>
@@ -139,7 +133,6 @@ export default async function Home() {
             Join 500K+ anime fans. Download MugenAnime and dive in instantly — no subscription, no ads.
           </p>
           <div className="flex items-center justify-center gap-4 flex-wrap">
-            <PlayStoreButton text="Download on Google Play" source="homepage_bottom_cta" />
             <Link href="/apps"
               className="inline-flex items-center gap-2 px-6 py-3 rounded-xl font-headline text-sm font-semibold transition-all duration-200 hover:bg-white/5"
               style={{ color: "rgba(222,229,255,0.55)", border: "1px solid rgba(255,255,255,0.1)" }}>
