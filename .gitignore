@@ -39,3 +39,16 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+/src/generated/prisma
+
+# Claude Code / AI tooling
+.claude/
+.agents/
+.agent/
+graphify-out/
+.graphify_python
+.graphify_uncached.txt
+spotlight_resp.json
+nextTask.md
+claude no restriction.md

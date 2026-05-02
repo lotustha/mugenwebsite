@@ -1,0 +1,266 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model App {
+  id            String          @id @default(uuid()) @db.Uuid
+  slug          String?         @unique
+  name          String
+  tagline       String?
+  description   String?         @db.Text
+  category      String?
+  iconUrl       String?         @map("icon_url")
+  bannerUrl     String?         @map("banner_url")
+  videoUrl      String?         @map("video_url")
+  privacyPolicy String?         @db.Text @map("privacy_policy")
+  version       String
+  size          String?
+  packageName   String?         @map("package_name")
+  published     Boolean         @default(true)
+  featured      Boolean         @default(false)
+  updatedAt     DateTime        @default(now()) @updatedAt @map("updated_at")
+  createdAt     DateTime        @default(now()) @map("created_at")
+  links         AppLink[]
+  screenshots   AppScreenshot[]
+  faqs          AppFaq[]
+
+  @@map("apps")
+}
+
+model AppLink {
+  id       String @id @default(uuid()) @db.Uuid
+  appId    String @map("app_id") @db.Uuid
+  platform String
+  url      String
+  app      App    @relation(fields: [appId], references: [id], onDelete: Cascade)
+
+  @@map("app_links")
+}
+
+model AppScreenshot {
+  id      String  @id @default(uuid()) @db.Uuid
+  appId   String  @map("app_id") @db.Uuid
+  url     String
+  caption String?
+  order   Int     @default(0)
+  app     App     @relation(fields: [appId], references: [id], onDelete: Cascade)
+
+  @@map("app_screenshots")
+}
+
+model AppFaq {
+  id       String @id @default(uuid()) @db.Uuid
+  appId    String @map("app_id") @db.Uuid
+  question String
+  answer   String @db.Text
+  order    Int    @default(0)
+  app      App    @relation(fields: [appId], references: [id], onDelete: Cascade)
+
+  @@map("app_faqs")
+}
+
+model User {
+  id         String      @id @default(uuid()) @db.Uuid
+  email      String      @unique
+  role       Role        @default(USER)
+  posts      Post[]
+  wallpapers Wallpaper[]
+  createdAt  DateTime    @default(now()) @map("created_at")
+
+  @@map("users")
+}
+
+enum Role {
+  USER
+  AUTHOR
+  ADMIN
+}
+
+model Post {
+  id                String     @id @default(uuid()) @db.Uuid
+  title             String
+  slug              String     @unique
+  summary           String
+  content           String     @db.Text
+  featuredImage     String?    @map("featured_image")
+  featuredImageAlt  String?    @map("featured_image_alt")
+  authorId          String     @map("author_id") @db.Uuid
+  author            User       @relation(fields: [authorId], references: [id])
+  published         Boolean    @default(false)
+  createdAt         DateTime   @default(now()) @map("created_at")
+  updatedAt         DateTime   @updatedAt @map("updated_at")
+  categories        Category[]
+  tags              Tag[]
+  seoMeta           SeoMeta?
+
+  @@map("posts")
+}
+
+model Category {
+  id    String @id @default(uuid()) @db.Uuid
+  name  String @unique
+  slug  String @unique
+  posts Post[]
+
+  @@map("categories")
+}
+
+model Tag {
+  id    String @id @default(uuid()) @db.Uuid
+  name  String @unique
+  slug  String @unique
+  posts Post[]
+
+  @@map("tags")
+}
+
+model SeoMeta {
+  id              String  @id @default(uuid()) @db.Uuid
+  postId          String  @unique @map("post_id") @db.Uuid
+  post            Post    @relation(fields: [postId], references: [id], onDelete: Cascade)
+  metaTitle       String  @map("meta_title")
+  metaDescription String  @map("meta_description")
+  ogImageUrl      String? @map("og_image_url")
+  canonicalUrl    String? @map("canonical_url")
+  keywords        String? @map("keywords")
+
+  @@map("seo_meta")
+}
+
+model Wallpaper {
+  id             String              @id @default(uuid()) @db.Uuid
+  title          String
+  description    String?
+  fileUrl        String              @map("file_url")
+  type           WallpaperType
+  uploaderId     String              @map("uploader_id") @db.Uuid
+  uploader       User                @relation(fields: [uploaderId], references: [id])
+  downloadsCount Int                 @default(0) @map("downloads_count")
+  createdAt      DateTime            @default(now()) @map("created_at")
+  categories     WallpaperCategory[]
+  tags           WallpaperTag[]
+
+  @@map("wallpapers")
+}
+
+enum WallpaperType {
+  IMAGE
+  VIDEO
+}
+
+model WallpaperCategory {
+  id         String      @id @default(uuid()) @db.Uuid
+  name       String      @unique
+  slug       String      @unique
+  wallpapers Wallpaper[]
+  createdAt  DateTime    @default(now()) @map("created_at")
+
+  @@map("wallpaper_categories")
+}
+
+model WallpaperTag {
+  id         String      @id @default(uuid()) @db.Uuid
+  name       String      @unique
+  slug       String      @unique
+  wallpapers Wallpaper[]
+
+  @@map("wallpaper_tags")
+}
+
+model RssFeed {
+  id              String         @id @default(uuid()) @db.Uuid
+  name            String
+  url             String
+  scheduleMinutes Int            @default(60)  @map("schedule_minutes") // 30 | 60 | 1440 | etc.
+  isActive        Boolean        @default(true) @map("is_active")
+  autoPublish     Boolean        @default(false) @map("auto_publish")
+  lastRunAt       DateTime?      @map("last_run_at")
+  createdAt       DateTime       @default(now()) @map("created_at")
+  updatedAt       DateTime       @updatedAt @map("updated_at")
+  logs            RssImportLog[]
+
+  @@map("rss_feeds")
+}
+
+model RssImportLog {
+  id          String   @id @default(uuid()) @db.Uuid
+  feedId      String   @map("feed_id") @db.Uuid
+  feed        RssFeed  @relation(fields: [feedId], references: [id], onDelete: Cascade)
+  itemGuid    String   @map("item_guid")       // original RSS guid/link — deduplication key
+  postId      String?  @map("post_id") @db.Uuid // null if skipped/failed
+  status      String   @default("ok")           // "ok" | "skipped" | "error"
+  errorMsg    String?  @map("error_msg")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@unique([feedId, itemGuid])
+  @@map("rss_import_logs")
+}
+
+model SystemSetting {
+  key   String @id
+  value String @db.Text
+
+  @@map("system_settings")
+}
+
+// ─── In-App Messaging ────────────────────────────────────────────────────────
+
+model InAppMessage {
+  id          String   @id @default(uuid()) @db.Uuid
+  title       String
+  body        String   @db.Text
+  imageUrl    String?  @map("image_url")
+  buttonText  String?  @map("button_text")
+  buttonUrl   String?  @map("button_url")   // URL or deep link e.g. mugenanime://post/slug
+  style       String   @default("info")      // info | warning | promo | alert
+  targetApp   String?  @map("target_app")    // app slug — null means all apps
+  persistent  Boolean  @default(false)       // show on every launch until button clicked
+  cancelable  Boolean  @default(true)        // false = MUST click button to dismiss
+  active      Boolean  @default(true)
+  priority    Int      @default(0)           // higher = shown first when multiple messages
+  startsAt    DateTime? @map("starts_at")
+  endsAt      DateTime? @map("ends_at")
+  createdAt   DateTime @default(now())  @map("created_at")
+  updatedAt   DateTime @updatedAt       @map("updated_at")
+
+  impressions InAppImpression[]
+  clicks      InAppClick[]
+
+  @@map("in_app_messages")
+}
+
+model InAppImpression {
+  id        String      @id @default(uuid()) @db.Uuid
+  messageId String      @map("message_id") @db.Uuid
+  message   InAppMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  deviceId  String?     @map("device_id")
+  seenAt    DateTime    @default(now()) @map("seen_at")
+
+  @@map("in_app_impressions")
+}
+
+model InAppClick {
+  id        String      @id @default(uuid()) @db.Uuid
+  messageId String      @map("message_id") @db.Uuid
+  message   InAppMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  deviceId  String?     @map("device_id")
+  clickedAt DateTime    @default(now()) @map("clicked_at")
+
+  @@map("in_app_clicks")
+}
+
+model FcmToken {
+  id        String   @id @default(uuid()) @db.Uuid
+  token     String   @unique
+  platform  String   @default("android") // android | ios
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("fcm_tokens")
+}
+
