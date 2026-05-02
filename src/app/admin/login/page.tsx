@@ -270,17 +270,6 @@ function LoginForm() {
 
           {/* Footer */}
           <p className="text-center font-body text-xs" style={{ color: "rgba(222,229,255,0.35)" }}>
-            No account?{" "}
-            <Link
-              href="/admin/signup"
-              className="font-medium transition-colors duration-200"
-              style={{ color: "rgba(186,158,255,0.75)" }}
-              onMouseEnter={(e) => (e.currentTarget.style.color = "#ba9eff")}
-              onMouseLeave={(e) => (e.currentTarget.style.color = "rgba(186,158,255,0.75)")}
-            >
-              Create one
-            </Link>
-            <span className="mx-2" style={{ color: "rgba(255,255,255,0.15)" }}>·</span>
             <Link
               href="/"
               className="transition-colors duration-200"
@@ -288,7 +277,7 @@ function LoginForm() {
               onMouseEnter={(e) => (e.currentTarget.style.color = "rgba(222,229,255,0.7)")}
               onMouseLeave={(e) => (e.currentTarget.style.color = "rgba(222,229,255,0.35)")}
             >
-              Back to site
+              ← Back to site
             </Link>
           </p>
         </div>
