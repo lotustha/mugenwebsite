@@ -42,7 +42,18 @@ export default function Footer() {
   };
 
   return (
-    <footer className="hidden md:block border-t" style={{ background: "rgba(6,3,18,0.98)", borderColor: "rgba(255,255,255,0.06)" }}>
+    <footer className="hidden md:block" style={{
+      background: "rgba(255,255,255,0.04)",
+      backdropFilter: "blur(40px) saturate(200%)",
+      WebkitBackdropFilter: "blur(40px) saturate(200%)",
+      borderTop: "1px solid rgba(255,255,255,0.10)",
+      boxShadow: [
+        "inset 0 0.5px 0 rgba(255,255,255,0.16)",   // top specular highlight
+        "inset 0 -0.5px 0 rgba(255,255,255,0.04)",  // subtle bottom edge
+        "0 -16px 48px rgba(0,0,0,0.3)",             // depth shadow upward
+        "0 0 80px rgba(139,92,246,0.04)",            // faint purple ambient
+      ].join(", "),
+    }}>
 
       {/* ── Main grid ── */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-14">
@@ -155,7 +166,7 @@ export default function Footer() {
       </div>
 
       {/* ── Bottom bar ── */}
-      <div className="border-t" style={{ borderColor: "rgba(255,255,255,0.05)" }}>
+      <div style={{ borderTop: "1px solid rgba(255,255,255,0.06)" }}>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-5 flex flex-col sm:flex-row items-center justify-between gap-3">
           <p className="font-body text-xs" style={{ color: "rgba(222,229,255,0.25)" }}>
             © {new Date().getFullYear()} MugenAnime. All rights reserved.
