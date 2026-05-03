@@ -261,17 +261,17 @@ function UpcomingPaymentCard() {
 
   const now = new Date();
 
-  // Upcoming payment = LAST month's earnings (NET 60: paid 2 months after earning month)
-  // e.g. it's May → April earnings → paid ~June 21 (AdMob) / ~June 30 (Unity)
-  const monthStart = fmt(new Date(now.getFullYear(), now.getMonth() - 1, 1));     // 1st of last month
-  const monthEnd   = fmt(new Date(now.getFullYear(), now.getMonth(), 0));          // last day of last month
-  const todayStr   = monthEnd; // fetch only through end of last month
+  // NET 60 cycle: earnings paid 2 months after the earning month ends
+  // It's May → March earnings are paid this month (May)
+  const monthStart = fmt(new Date(now.getFullYear(), now.getMonth() - 2, 1));   // 1st of 2 months ago
+  const monthEnd   = fmt(new Date(now.getFullYear(), now.getMonth() - 1, 0));   // last day of 2 months ago
+  const todayStr   = monthEnd;
 
-  const admobPay = new Date(now.getFullYear(), now.getMonth() + 1, 21); // 21st of next month (2 months after last month)
-  const unityPay = new Date(now.getFullYear(), now.getMonth() + 2, 0);  // last day of next month (2 months after last month)
+  const admobPay = new Date(now.getFullYear(), now.getMonth(), 21);     // ~21st of THIS month
+  const unityPay = new Date(now.getFullYear(), now.getMonth() + 1, 0); // last day of THIS month
   const fmtDate  = (d: Date) => d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 
-  const prevMonthName = new Date(now.getFullYear(), now.getMonth() - 1, 1)
+  const earningMonthName = new Date(now.getFullYear(), now.getMonth() - 2, 1)
     .toLocaleString("default", { month: "long", year: "numeric" });
 
   useEffect(() => {
@@ -304,7 +304,7 @@ function UpcomingPaymentCard() {
           </div>
           <p className="font-headline text-sm font-semibold text-white">Upcoming Payment</p>
         </div>
-        <span className="font-body text-[0.625rem]" style={{ color: DIM }}>{prevMonthName} earnings</span>
+        <span className="font-body text-[0.625rem]" style={{ color: DIM }}>{earningMonthName} earnings</span>
       </div>
 
       <div className="p-5 space-y-4">
@@ -394,7 +394,7 @@ function UpcomingPaymentCard() {
 
             {/* Note */}
             <p className="font-body text-[0.5625rem] leading-relaxed" style={{ color: "rgba(255,255,255,0.18)" }}>
-              Payment dates are estimates (NET 60 cycle). AdMob pays ~21st of the month after next; Unity pays ~end of the month after next. Actual dates depend on your account settings and payment method.
+              Estimates based on NET 60 cycle. AdMob pays ~21st of the current month; Unity pays ~end of current month. Actual dates depend on your account settings and payment method.
             </p>
           </>
         )}
