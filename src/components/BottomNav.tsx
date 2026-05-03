@@ -68,11 +68,15 @@ export default function BottomNav() {
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-50 md:hidden"
       style={{
-        background: "rgba(7,4,20,0.88)",
-        backdropFilter: "blur(24px)",
-        WebkitBackdropFilter: "blur(24px)",
-        borderTop: "1px solid rgba(255,255,255,0.08)",
-        boxShadow: "0 -8px 32px rgba(0,0,0,0.4), inset 0 0.5px 0 rgba(255,255,255,0.08)",
+        background: "rgba(255,255,255,0.04)",
+        backdropFilter: "blur(40px) saturate(200%)",
+        WebkitBackdropFilter: "blur(40px) saturate(200%)",
+        borderTop: "1px solid rgba(255,255,255,0.11)",
+        boxShadow: [
+          "inset 0 0.5px 0 rgba(255,255,255,0.18)",  // top specular
+          "0 -8px 40px rgba(0,0,0,0.45)",             // depth shadow
+          "0 -2px 12px rgba(139,92,246,0.08)",         // purple tint
+        ].join(", "),
         paddingBottom: "env(safe-area-inset-bottom)",
       }}>
       <div className="flex items-stretch h-16">
