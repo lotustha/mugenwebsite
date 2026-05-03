@@ -240,45 +240,53 @@ function AppRow({ app }: { app: any }) {
   return (
     <div className="group rounded-3xl overflow-hidden transition-all duration-300 hover:border-purple-500/25 hover:shadow-[0_8px_48px_rgba(139,92,246,0.1)]"
       style={{ background: G, border: `1px solid ${B}` }}>
-      <div className="grid lg:grid-cols-[280px_1fr_auto] gap-0">
 
-        {/* ── Banner thumbnail ── */}
-        <Link href={`/apps/${slug}`}
-          className="relative h-48 lg:h-auto overflow-hidden flex-none cursor-pointer block"
-          style={{ background: `linear-gradient(135deg,rgba(139,92,246,0.2),rgba(217,70,239,0.1))`, minHeight: "160px" }}>
-          {app.bannerUrl ? (
-            <Image src={app.bannerUrl} alt={app.name} fill
-              sizes="(max-width: 1024px) 100vw, 280px"
-              className="object-cover transition-transform duration-500 group-hover:scale-105" />
-          ) : (
-            <div className="absolute inset-0 flex items-center justify-center">
-              <div className="w-16 h-16 rounded-3xl flex items-center justify-center opacity-25"
-                style={{ background: `linear-gradient(135deg,${P},${M})` }}>
-                <svg viewBox="0 0 24 24" fill="currentColor" className="w-8 h-8 text-white">
-                  <path d="M10.5 1.5H8.25A2.25 2.25 0 0 0 6 3.75v16.5a2.25 2.25 0 0 0 2.25 2.25h7.5A2.25 2.25 0 0 0 18 20.25V3.75a2.25 2.25 0 0 0-2.25-2.25H13.5m-3 0V3h3V1.5m-3 0h3m-3 18h3" />
-                </svg>
-              </div>
+      {/* ── Banner — full width, proper breathing space ── */}
+      <Link href={`/apps/${slug}`} className="block relative overflow-hidden cursor-pointer"
+        style={{ aspectRatio: "16/5", background: `linear-gradient(135deg,rgba(139,92,246,0.25),rgba(217,70,239,0.1))` }}>
+        {app.bannerUrl ? (
+          <Image src={app.bannerUrl} alt={app.name} fill
+            sizes="(max-width: 768px) 100vw, 800px"
+            className="object-cover transition-transform duration-700 group-hover:scale-[1.03]" />
+        ) : (
+          <div className="absolute inset-0 flex items-center justify-center">
+            <div className="w-14 h-14 rounded-3xl flex items-center justify-center opacity-20"
+              style={{ background: `linear-gradient(135deg,${P},${M})` }}>
+              <svg viewBox="0 0 24 24" fill="currentColor" className="w-7 h-7 text-white">
+                <path d="M10.5 1.5H8.25A2.25 2.25 0 0 0 6 3.75v16.5a2.25 2.25 0 0 0 2.25 2.25h7.5A2.25 2.25 0 0 0 18 20.25V3.75a2.25 2.25 0 0 0-2.25-2.25H13.5m-3 0V3h3V1.5m-3 0h3m-3 18h3" />
+              </svg>
             </div>
-          )}
-          <div className="absolute inset-0 lg:hidden" style={{ background: "linear-gradient(to bottom,transparent 40%,rgba(6,3,18,0.9))" }} />
+          </div>
+        )}
+        {/* bottom fade into card body */}
+        <div className="absolute inset-0"
+          style={{ background: "linear-gradient(to bottom, transparent 50%, rgba(6,3,18,0.85) 100%)" }} />
+      </Link>
+
+      {/* ── Card body ── */}
+      <div className="flex flex-col sm:flex-row sm:items-start gap-4 p-5 sm:p-6">
+
+        {/* Icon — pulls up to overlap banner */}
+        <Link href={`/apps/${slug}`} className="flex-none -mt-10 sm:-mt-12 relative z-10">
+          <div className="w-16 h-16 sm:w-18 sm:h-18 rounded-2xl overflow-hidden shadow-2xl flex items-center justify-center"
+            style={{ background: `linear-gradient(135deg,${P},${M})`, border: "3px solid rgba(6,3,18,0.8)",
+              width: 68, height: 68 }}>
+            {app.iconUrl
+              ? <Image src={app.iconUrl} alt={app.name} width={68} height={68} className="w-full h-full object-cover" />
+              : <svg viewBox="0 0 24 24" fill="currentColor" className="w-8 h-8 text-white"><path d="M10.5 1.5H8.25A2.25 2.25 0 0 0 6 3.75v16.5a2.25 2.25 0 0 0 2.25 2.25h7.5A2.25 2.25 0 0 0 18 20.25V3.75a2.25 2.25 0 0 0-2.25-2.25H13.5m-3 0V3h3V1.5m-3 0h3m-3 18h3" /></svg>
+            }
+          </div>
         </Link>
 
-        {/* ── Details ── */}
-        <div className="flex flex-col gap-4 p-6 lg:p-7 min-w-0">
+        {/* Details */}
+        <div className="flex-1 min-w-0 flex flex-col gap-2 sm:pt-1">
 
-          {/* Icon + name row */}
-          <div className="flex items-center gap-4">
-            <div className="w-14 h-14 rounded-2xl overflow-hidden flex-none shadow-xl flex items-center justify-center"
-              style={{ background: `linear-gradient(135deg,${P},${M})`, border: "2px solid rgba(6,3,18,0.6)", flexShrink: 0 }}>
-              {app.iconUrl
-                ? <Image src={app.iconUrl} alt={app.name} width={56} height={56} className="w-full h-full object-cover" />
-                : <svg viewBox="0 0 24 24" fill="currentColor" className="w-7 h-7 text-white"><path d="M10.5 1.5H8.25A2.25 2.25 0 0 0 6 3.75v16.5a2.25 2.25 0 0 0 2.25 2.25h7.5A2.25 2.25 0 0 0 18 20.25V3.75a2.25 2.25 0 0 0-2.25-2.25H13.5m-3 0V3h3V1.5m-3 0h3m-3 18h3" /></svg>
-              }
-            </div>
+          {/* Name row */}
+          <div className="flex items-start justify-between gap-3 flex-wrap">
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
                 <Link href={`/apps/${slug}`}>
-                  <h2 className="font-headline text-xl font-bold text-white hover:text-primary transition-colors cursor-pointer">{app.name}</h2>
+                  <h2 className="font-headline text-lg font-bold text-white hover:text-primary transition-colors cursor-pointer">{app.name}</h2>
                 </Link>
                 {app.category && (
                   <span className="px-2.5 py-1 rounded-full font-body text-[0.625rem] font-semibold uppercase tracking-wide flex-none"
@@ -291,40 +299,44 @@ function AppRow({ app }: { app: any }) {
                   Free
                 </span>
               </div>
-              <p className="font-body text-xs mt-1" style={{ color: "rgba(222,229,255,0.3)" }}>
+              <p className="font-body text-xs mt-0.5" style={{ color: "rgba(222,229,255,0.3)" }}>
                 v{app.version}{app.size ? ` · ${app.size}` : ""}
-                {app.packageName ? ` · ${app.packageName}` : ""}
               </p>
             </div>
+
+            {/* CTA — top right on desktop */}
+            {primary && (
+              <a href={primary.url} target="_blank" rel="noopener noreferrer"
+                className="hidden sm:flex flex-none items-center gap-2 px-5 py-2.5 rounded-2xl font-headline text-sm font-bold transition-all duration-200 hover:brightness-110 active:scale-[0.97] cursor-pointer"
+                style={{ background: `linear-gradient(135deg,${P},${M})`, color: "white", boxShadow: `0 4px 20px rgba(139,92,246,0.3)` }}>
+                <svg viewBox="0 0 16 16" fill="currentColor" className="w-3.5 h-3.5">
+                  <path d="M10.75 2.75a.75.75 0 0 0-1.5 0v5.69L7.03 6.22a.75.75 0 0 0-1.06 1.06l3.5 3.5a.75.75 0 0 0 1.06 0l3.5-3.5a.75.75 0 0 0-1.06-1.06l-2.22 2.22V2.75Z" />
+                </svg>
+                Download
+              </a>
+            )}
           </div>
 
-          {/* Tagline + description */}
+          {/* Tagline */}
           {(app.tagline || app.description) && (
-            <div className="space-y-1">
-              {app.tagline && (
-                <p className="font-headline text-base font-semibold" style={{ color: "rgba(222,229,255,0.85)" }}>{app.tagline}</p>
-              )}
-              {app.description && (
-                <p className="font-body text-sm leading-relaxed line-clamp-2" style={{ color: "rgba(222,229,255,0.45)" }}>
-                  {app.description}
-                </p>
-              )}
-            </div>
+            <p className="font-body text-sm leading-relaxed line-clamp-2" style={{ color: "rgba(222,229,255,0.5)" }}>
+              {app.tagline || app.description}
+            </p>
           )}
 
           {/* Screenshots strip */}
           {shots.length > 0 && (
-            <div className="flex gap-2">
+            <div className="flex gap-2 mt-1">
               {shots.map((s, i) => (
                 <div key={i} className="relative rounded-xl overflow-hidden flex-none"
-                  style={{ width: 56, aspectRatio: "9/16", background: "rgba(6,14,32,0.8)", border: `1px solid ${B}` }}>
-                  <Image src={s.url} alt={s.caption || `Screenshot ${i + 1}`} fill sizes="56px" className="object-cover" />
+                  style={{ width: 48, aspectRatio: "9/16", background: "rgba(6,14,32,0.8)", border: `1px solid ${B}` }}>
+                  <Image src={s.url} alt={s.caption || `Screenshot ${i + 1}`} fill sizes="48px" className="object-cover" />
                 </div>
               ))}
               {(app.screenshots?.length ?? 0) > 3 && (
                 <Link href={`/apps/${slug}`}
                   className="relative rounded-xl overflow-hidden flex-none flex items-center justify-center cursor-pointer"
-                  style={{ width: 56, aspectRatio: "9/16", background: "rgba(139,92,246,0.1)", border: "1px solid rgba(139,92,246,0.2)" }}>
+                  style={{ width: 48, aspectRatio: "9/16", background: "rgba(139,92,246,0.1)", border: "1px solid rgba(139,92,246,0.2)" }}>
                   <span className="font-headline text-xs font-bold" style={{ color: "#a78bfa" }}>
                     +{app.screenshots.length - 3}
                   </span>
@@ -348,35 +360,25 @@ function AppRow({ app }: { app: any }) {
               </span>
             )}
           </div>
-        </div>
 
-        {/* ── CTA column ── */}
-        <div className="flex flex-row lg:flex-col items-center justify-between lg:justify-center gap-3 px-6 pb-6 pt-0 lg:py-7 lg:pr-7 lg:pl-0 lg:min-w-[180px]">
-          {primary && (
-            <a href={primary.url} target="_blank" rel="noopener noreferrer"
-              className="w-full flex items-center justify-center gap-2 px-5 py-3 rounded-2xl font-headline text-sm font-bold transition-all duration-200 hover:brightness-110 active:scale-[0.97] cursor-pointer whitespace-nowrap"
-              style={{ background: `linear-gradient(135deg,${P},${M})`, color: "white", boxShadow: "0 4px 20px rgba(139,92,246,0.3)" }}>
-              <svg viewBox="0 0 16 16" fill="currentColor" className="w-3.5 h-3.5">
-                <path d="M10.75 2.75a.75.75 0 0 0-1.5 0v5.69L7.03 6.22a.75.75 0 0 0-1.06 1.06l3.5 3.5a.75.75 0 0 0 1.06 0l3.5-3.5a.75.75 0 0 0-1.06-1.06l-2.22 2.22V2.75Z" />
-              </svg>
-              Download
-            </a>
-          )}
-          {apk && apk !== primary && (
-            <a href={apk.url} target="_blank" rel="noopener noreferrer"
-              className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl font-body text-xs font-semibold transition-all hover:bg-white/5 cursor-pointer whitespace-nowrap"
-              style={{ color: "#a78bfa", border: "1px solid rgba(139,92,246,0.25)" }}>
-              APK Direct
-            </a>
-          )}
-          <Link href={`/apps/${slug}`}
-            className="w-full flex items-center justify-center gap-1 font-body text-xs transition-colors hover:text-white cursor-pointer whitespace-nowrap"
-            style={{ color: "rgba(222,229,255,0.3)" }}>
-            View Details
-            <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-3 h-3">
-              <path d="M2.5 6h7M6.5 3l3 3-3 3" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-          </Link>
+          {/* Mobile CTA */}
+          <div className="flex sm:hidden items-center gap-2 mt-1">
+            {primary && (
+              <a href={primary.url} target="_blank" rel="noopener noreferrer"
+                className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl font-headline text-sm font-bold transition-all hover:brightness-110 active:scale-[0.97] cursor-pointer"
+                style={{ background: `linear-gradient(135deg,${P},${M})`, color: "white" }}>
+                <svg viewBox="0 0 16 16" fill="currentColor" className="w-3.5 h-3.5">
+                  <path d="M10.75 2.75a.75.75 0 0 0-1.5 0v5.69L7.03 6.22a.75.75 0 0 0-1.06 1.06l3.5 3.5a.75.75 0 0 0 1.06 0l3.5-3.5a.75.75 0 0 0-1.06-1.06l-2.22 2.22V2.75Z" />
+                </svg>
+                Download
+              </a>
+            )}
+            <Link href={`/apps/${slug}`}
+              className="flex items-center gap-1 px-4 py-2.5 rounded-xl font-body text-xs cursor-pointer transition-colors hover:text-white"
+              style={{ color: "rgba(222,229,255,0.3)", border: `1px solid ${B}` }}>
+              Details
+            </Link>
+          </div>
         </div>
       </div>
     </div>
