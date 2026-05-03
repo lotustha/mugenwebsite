@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import Pagination from "@/components/Pagination";
 import Image from "next/image";
 import Link from "next/link";
 import { setPreview } from "@/lib/preview-store";
@@ -134,6 +135,8 @@ function FilterBtn({ active, onClick, count, children }: {
 
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
+const PER_PAGE = 24;
+
 export default function WallpapersContent() {
   const [wallpapers, setWallpapers]   = useState<Wallpaper[]>([]);
   const [categories, setCategories]   = useState<Category[]>([]);
@@ -141,45 +144,61 @@ export default function WallpapersContent() {
   const [search, setSearch]           = useState("");
   const [debSearch, setDebSearch]     = useState("");
   const [typeFilter, setTypeFilter]   = useState<TypeFilter>("ALL");
-  const [catFilter, setCatFilter]     = useState<string>("ALL");
-  const [sort, setSort]               = useState<SortOption>("newest");
+  const [catFilter, setCatFilter]     = useState<string>("ALL"); // stores slug
   const [drawerOpen, setDrawerOpen]   = useState(false);
+  const [page, setPage]               = useState(1);
+  const [totalPages, setTotalPages]   = useState(1);
+  const [total, setTotal]             = useState(0);
+  const topRef = useRef<HTMLDivElement>(null);
 
-  // Debounce search 280 ms
+  // Debounce search 350 ms
   useEffect(() => {
-    const t = setTimeout(() => setDebSearch(search), 280);
+    const t = setTimeout(() => setDebSearch(search), 350);
     return () => clearTimeout(t);
   }, [search]);
 
-  // Fetch
+  // Server-side fetch with pagination + filters
+  const fetchWallpapers = useCallback(async (p: number) => {
+    setLoading(true);
+    const params = new URLSearchParams({ page: String(p), limit: String(PER_PAGE) });
+    if (typeFilter !== "ALL") params.set("type", typeFilter);
+    if (catFilter !== "ALL") params.set("category", catFilter);
+    if (debSearch) params.set("search", debSearch);
+
+    try {
+      const data = await fetch(`/api/wallpapers?${params}`).then(r => r.json());
+      setWallpapers(Array.isArray(data) ? data : (data.wallpapers ?? []));
+      setTotal(data.total ?? 0);
+      setTotalPages(data.pages ?? 1);
+    } catch {
+      setWallpapers([]);
+    }
+    setLoading(false);
+  }, [typeFilter, catFilter, debSearch]);
+
+  // Fetch categories once
   useEffect(() => {
-    Promise.all([
-      fetch("/api/wallpapers").then(r => r.json()),
-      fetch("/api/wallpaper-categories").then(r => r.json()),
-    ]).then(([ws, cats]) => {
-      setWallpapers(Array.isArray(ws) ? ws : []);
-      setCategories(Array.isArray(cats) ? cats : []);
-    }).catch(() => {}).finally(() => setLoading(false));
+    fetch("/api/wallpaper-categories").then(r => r.json())
+      .then(d => setCategories(Array.isArray(d) ? d : [])).catch(() => {});
   }, []);
 
-  // Filter + sort (client-side)
-  const filtered = useMemo(() => {
-    let list = [...wallpapers];
-    if (typeFilter !== "ALL") list = list.filter(w => w.type === typeFilter);
-    if (catFilter === "NONE") list = list.filter(w => !w.category);
-    else if (catFilter !== "ALL") list = list.filter(w => w.category?.id === catFilter);
-    if (debSearch) {
-      const q = debSearch.toLowerCase();
-      list = list.filter(w => w.title.toLowerCase().includes(q) || w.category?.name.toLowerCase().includes(q));
-    }
-    if (sort === "oldest") list.reverse();
-    if (sort === "az") list.sort((a, b) => a.title.localeCompare(b.title));
-    return list;
-  }, [wallpapers, typeFilter, catFilter, debSearch, sort]);
+  // Re-fetch when filters change — reset to page 1
+  useEffect(() => {
+    setPage(1);
+    fetchWallpapers(1);
+  }, [typeFilter, catFilter, debSearch]); // eslint-disable-line
 
+  // Re-fetch when page changes (not filter change)
+  const goToPage = (p: number) => {
+    setPage(p);
+    fetchWallpapers(p);
+    topRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
+
+  const filtered   = wallpapers; // already filtered server-side
   const hasFilters = typeFilter !== "ALL" || catFilter !== "ALL" || debSearch !== "";
 
-  const resetFilters = () => { setSearch(""); setTypeFilter("ALL"); setCatFilter("ALL"); setSort("newest"); };
+  const resetFilters = () => { setSearch(""); setTypeFilter("ALL"); setCatFilter("ALL"); setPage(1); };
 
   // Sidebar JSX — reused in desktop aside + mobile drawer
   const sidebar = (
@@ -194,18 +213,12 @@ export default function WallpapersContent() {
         <SideSection title="Category">
           <FilterBtn active={catFilter === "ALL"} onClick={() => setCatFilter("ALL")}>All Categories</FilterBtn>
           {categories.map(c => (
-            <FilterBtn key={c.id} active={catFilter === c.id} onClick={() => setCatFilter(c.id)} count={c.count}>
+            <FilterBtn key={c.id} active={catFilter === c.slug} onClick={() => setCatFilter(c.slug)} count={c.count}>
               {c.name}
             </FilterBtn>
           ))}
         </SideSection>
       )}
-
-      <SideSection title="Sort By">
-        <FilterBtn active={sort === "newest"} onClick={() => setSort("newest")}>Newest First</FilterBtn>
-        <FilterBtn active={sort === "oldest"} onClick={() => setSort("oldest")}>Oldest First</FilterBtn>
-        <FilterBtn active={sort === "az"} onClick={() => setSort("az")}>A → Z</FilterBtn>
-      </SideSection>
 
       {hasFilters && (
         <button type="button" onClick={resetFilters}
@@ -218,7 +231,7 @@ export default function WallpapersContent() {
   );
 
   return (
-    <div className="flex gap-7 items-start">
+    <div className="flex gap-7 items-start" ref={topRef}>
 
       {/* ── Desktop sidebar ── */}
       <aside className="hidden lg:block w-48 xl:w-52 flex-none sticky top-24">
@@ -277,9 +290,9 @@ export default function WallpapersContent() {
           </button>
 
           {/* Result count */}
-          {!loading && (
+          {!loading && total > 0 && (
             <span className="hidden sm:block font-mono text-xs tabular-nums flex-none" style={{ color: textDim }}>
-              {filtered.length}<span style={{ color: "rgba(255,255,255,0.12)" }}>/{wallpapers.length}</span>
+              {total.toLocaleString()} wallpapers
             </span>
           )}
         </div>
@@ -292,7 +305,7 @@ export default function WallpapersContent() {
             )}
             {catFilter !== "ALL" && (
               <Chip onRemove={() => setCatFilter("ALL")}>
-                {catFilter === "NONE" ? "Uncategorized" : categories.find(c => c.id === catFilter)?.name ?? catFilter}
+                {categories.find(c => c.slug === catFilter)?.name ?? catFilter}
               </Chip>
             )}
             {debSearch && <Chip onRemove={() => setSearch("")}>"{debSearch}"</Chip>}
@@ -335,6 +348,11 @@ export default function WallpapersContent() {
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-3">
             {filtered.map(w => <WallpaperCard key={w.id} w={w} />)}
           </div>
+        )}
+
+        {/* Pagination */}
+        {!loading && totalPages > 1 && (
+          <Pagination page={page} pages={totalPages} total={total} onChange={goToPage} />
         )}
       </div>
 

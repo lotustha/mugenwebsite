@@ -2,6 +2,9 @@
 
 import { useEffect, useState, useCallback, useRef } from "react";
 import AnimeGrid from "@/components/AnimeGrid";
+import Pagination from "@/components/Pagination";
+
+const ANIME_PER_PAGE = 24;
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type Tab    = "recent" | "new" | "all";
@@ -256,7 +259,9 @@ export default function AnimeContent() {
   const [loading, setLoading]   = useState(true);
   const [searching, setSearching] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [page, setPage]         = useState(1);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const topRef      = useRef<HTMLDivElement>(null);
 
   // Initial data fetch
   useEffect(() => {
@@ -287,6 +292,9 @@ export default function AnimeContent() {
     }, 380);
   }, []);
 
+  // Reset page when tab / status / search changes
+  useEffect(() => { setPage(1); }, [tab, status, searchQuery]);
+
   // Compute displayed anime
   const all = dedup([...recent, ...newR]);
   const base =
@@ -294,7 +302,14 @@ export default function AnimeContent() {
     tab === "recent"   ? recent :
     tab === "new"      ? newR :
     all;
-  const displayed = searchQuery.trim() ? base : applyStatus(base, status);
+  const displayed   = searchQuery.trim() ? base : applyStatus(base, status);
+  const totalPages  = Math.max(1, Math.ceil(displayed.length / ANIME_PER_PAGE));
+  const pageItems   = displayed.slice((page - 1) * ANIME_PER_PAGE, page * ANIME_PER_PAGE);
+
+  const goToPage = (p: number) => {
+    setPage(p);
+    topRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
 
   // Active filter tags for display
   const filterTags: string[] = [];
@@ -312,7 +327,7 @@ export default function AnimeContent() {
   };
 
   return (
-    <div className="min-h-screen">
+    <div className="min-h-screen" ref={topRef}>
       {/* ── Page header ── */}
       <div className="mb-8 flex items-center justify-between">
         <div>
@@ -380,6 +395,9 @@ export default function AnimeContent() {
             {!loading && (
               <span className="font-body text-xs ml-auto flex-none" style={{ color: dimmed }}>
                 {searching ? "Searching…" : `${displayed.length} results`}
+                {!searching && totalPages > 1 && (
+                  <span style={{ color: "rgba(255,255,255,0.15)" }}> · pg {page}/{totalPages}</span>
+                )}
               </span>
             )}
           </div>
@@ -408,7 +426,12 @@ export default function AnimeContent() {
               )}
             </div>
           ) : (
-            <AnimeGrid anime={displayed} />
+            <AnimeGrid anime={pageItems} />
+          )}
+
+          {/* Pagination */}
+          {!loading && !searching && totalPages > 1 && (
+            <Pagination page={page} pages={totalPages} total={displayed.length} onChange={goToPage} />
           )}
         </main>
       </div>
