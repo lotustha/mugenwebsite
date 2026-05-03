@@ -327,16 +327,27 @@ async function processItem(
   if (!item.title && !item.content && !item.description) {
     return { status: "error", error: "Item has no title or content" };
   }
+  // Skip items whose combined text is too short for AI to rewrite meaningfully
+  // (contest pages, redirect stubs, etc. often have <100 chars after HTML strip)
+  const combinedText = `${item.title ?? ""} ${item.content ?? ""} ${item.description ?? ""}`.trim();
+  if (combinedText.length < 120) {
+    return { status: "error", error: `Item content too short (${combinedText.length} chars) — likely a stub or contest page` };
+  }
 
   // 1. Fetch existing categories for AI context
   const existingCats = await prisma.category.findMany({ select: { id: true, name: true, slug: true } });
   const catNames = existingCats.map((c) => c.name);
 
-  // 2. Call AI
+  // 2. Call AI — retry once on empty response
   const prompt = AI_PROMPT(item, catNames);
   let aiRaw: string;
   try {
     aiRaw = await callAi(aiSettings, prompt);
+    // Retry once if the AI returned an empty body (transient issue)
+    if (!aiRaw?.trim()) {
+      await new Promise(r => setTimeout(r, 1500));
+      aiRaw = await callAi(aiSettings, prompt);
+    }
   } catch (e) {
     return { status: "error", error: `AI call failed: ${e instanceof Error ? e.message : String(e)}` };
   }
@@ -346,7 +357,7 @@ async function processItem(
   try {
     let toParse = aiRaw.trim();
     if (!toParse) {
-      throw new Error("AI returned empty response");
+      throw new Error("AI returned empty response after retry — item may have too little content");
     }
     // Strip markdown code fences if present
     const fenced = toParse.match(/```(?:json)?\s*(\{[\s\S]*\})\s*```/);
