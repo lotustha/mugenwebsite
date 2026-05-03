@@ -448,6 +448,25 @@ function FeedCard({
             </button>
           </div>
         )}
+
+        {/* ── Inline last-error preview ── */}
+        {!running && !runResult && errLogs.length > 0 && errLogs[0]?.errorMsg && (
+          <div className="flex items-start gap-2 px-3 py-2.5 rounded-xl"
+            style={{ background: "rgba(248,113,113,0.07)", border: "1px solid rgba(248,113,113,0.15)" }}>
+            <svg viewBox="0 0 16 16" fill="#f87171" className="w-3.5 h-3.5 flex-none mt-0.5">
+              <path fillRule="evenodd" d="M8 1.5a6.5 6.5 0 1 0 0 13 6.5 6.5 0 0 0 0-13ZM0 8a8 8 0 1 1 16 0A8 8 0 0 1 0 8Zm7.25-3.25a.75.75 0 0 1 1.5 0v3.5a.75.75 0 0 1-1.5 0v-3.5ZM8 11a1 1 0 1 1 0-2 1 1 0 0 1 0 2Z" clipRule="evenodd" />
+            </svg>
+            <div className="flex-1 min-w-0">
+              <p className="font-body text-[0.625rem] font-semibold text-red-400 mb-0.5">
+                Last error ({timeAgo(errLogs[0].createdAt)})
+              </p>
+              <p className="font-mono text-[0.5625rem] leading-relaxed break-all"
+                style={{ color: "rgba(252,165,165,0.75)" }}>
+                {errLogs[0].errorMsg}
+              </p>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* ── Pipeline (while running) ── */}
