@@ -76,6 +76,7 @@ function pct(a: number, b: number) {
 // ─── Date ranges ─────────────────────────────────────────────────────────────
 const RANGES = [
   { label: "Today",       start: () => fmt(new Date()),                                                                                     end: () => fmt(new Date()) },
+  { label: "Yesterday",   start: () => fmt(new Date(Date.now() - 86400000)),                                                                end: () => fmt(new Date(Date.now() - 86400000)) },
   { label: "7D",          start: () => fmt(new Date(Date.now() - 6  * 86400000)),                                                           end: () => fmt(new Date()) },
   { label: "30D",         start: () => fmt(new Date(Date.now() - 29 * 86400000)),                                                           end: () => fmt(new Date()) },
   { label: "90D",         start: () => fmt(new Date(Date.now() - 89 * 86400000)),                                                           end: () => fmt(new Date()) },
@@ -253,9 +254,154 @@ function aggregateByMonth(daily: any[]) {
   return Object.values(months).sort((a, b) => b.month.localeCompare(a.month));
 }
 
+// ─── Upcoming payment card ────────────────────────────────────────────────────
+function UpcomingPaymentCard() {
+  const [data, setData]     = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+
+  const now        = new Date();
+  const monthStart = fmt(new Date(now.getFullYear(), now.getMonth(), 1));
+  const todayStr   = fmt(now);
+
+  // Next estimated payment dates
+  // AdMob: ~21st of next month | Unity: ~last day of next month
+  const admobPay = new Date(now.getFullYear(), now.getMonth() + 1, 21);
+  const unityPay = new Date(now.getFullYear(), now.getMonth() + 2, 0); // last day of next month
+  const fmtDate  = (d: Date) => d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+
+  useEffect(() => {
+    const key    = CACHE_KEY(monthStart, todayStr);
+    const cached = readCache(key);
+    if (cached) { setData(cached); setLoading(false); }
+    fetch(`/api/admin/income?start=${monthStart}&end=${todayStr}`)
+      .then(r => r.json())
+      .then(d => { setData(d); writeCache(key, d); setLoading(false); })
+      .catch(() => setLoading(false));
+  }, []); // eslint-disable-line
+
+  const admobEarnings = data?.totals?.admob  ?? 0;
+  const unityEarnings = data?.totals?.unity  ?? 0;
+  const combined      = admobEarnings + unityEarnings;
+  const THRESHOLD     = 100; // $100 minimum payout threshold
+  const progress      = Math.min((combined / THRESHOLD) * 100, 100);
+  const thresholdMet  = combined >= THRESHOLD;
+  const monthName     = now.toLocaleString("default", { month: "long" });
+
+  return (
+    <div className="rounded-2xl overflow-hidden" style={{ background: CARD, border: `1px solid ${BDR}` }}>
+      {/* Header */}
+      <div className="px-5 py-4 border-b flex items-center justify-between" style={{ borderColor: BDR }}>
+        <div className="flex items-center gap-2.5">
+          <div className="w-7 h-7 rounded-lg flex items-center justify-center"
+            style={{ background: thresholdMet ? "rgba(16,185,129,0.15)" : "rgba(245,158,11,0.12)" }}>
+            <svg viewBox="0 0 16 16" fill={thresholdMet ? TOTAL : AMBER} className="w-3.5 h-3.5">
+              <path d="M8 .25a.75.75 0 0 1 .673.418l1.882 3.815 4.21.612a.75.75 0 0 1 .416 1.279l-3.046 2.97.719 4.192a.751.751 0 0 1-1.088.791L8 12.347l-3.766 1.98a.75.75 0 0 1-1.088-.79l.72-4.194L.818 6.374a.75.75 0 0 1 .416-1.28l4.21-.611L7.327.668A.75.75 0 0 1 8 .25Z" />
+            </svg>
+          </div>
+          <p className="font-headline text-sm font-semibold text-white">Upcoming Payment</p>
+        </div>
+        <span className="font-body text-[0.625rem]" style={{ color: DIM }}>{monthName} earnings</span>
+      </div>
+
+      <div className="p-5 space-y-4">
+        {loading ? (
+          <div className="h-20 rounded-xl animate-pulse" style={{ background: "rgba(255,255,255,0.04)" }} />
+        ) : (
+          <>
+            {/* Total + threshold progress */}
+            <div>
+              <div className="flex items-end justify-between mb-2">
+                <div>
+                  <p className="font-body text-[0.625rem] uppercase tracking-widest font-semibold mb-1" style={{ color: DIM }}>
+                    Estimated payout
+                  </p>
+                  <p className="font-headline text-2xl font-bold" style={{ color: thresholdMet ? TOTAL : "rgba(222,229,255,0.8)" }}>
+                    <AnimatedNumber value={combined} fmt={n => usd(n)} />
+                  </p>
+                </div>
+                {thresholdMet ? (
+                  <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-full font-body text-[0.625rem] font-semibold mb-0.5"
+                    style={{ background: "rgba(16,185,129,0.12)", color: "#34d399", border: "1px solid rgba(16,185,129,0.25)" }}>
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                    Threshold met
+                  </span>
+                ) : (
+                  <span className="font-body text-[0.625rem] mb-0.5" style={{ color: DIM }}>
+                    {usd(THRESHOLD - combined)} to go
+                  </span>
+                )}
+              </div>
+
+              {/* Progress bar */}
+              <div className="h-1.5 rounded-full overflow-hidden" style={{ background: "rgba(255,255,255,0.07)" }}>
+                <div className="h-full rounded-full transition-all duration-700"
+                  style={{
+                    width: `${progress}%`,
+                    background: thresholdMet
+                      ? `linear-gradient(90deg,${TOTAL},#34d399)`
+                      : `linear-gradient(90deg,${ADMOB},${UNITY})`,
+                  }} />
+              </div>
+              <p className="font-body text-[0.5625rem] mt-1" style={{ color: DIM }}>
+                ${THRESHOLD} minimum payout threshold
+              </p>
+            </div>
+
+            {/* Per-network breakdown with payment dates */}
+            <div className="grid grid-cols-2 gap-3">
+              {/* AdMob */}
+              <div className="rounded-xl p-4 space-y-2"
+                style={{ background: `${ADMOB}0d`, border: `1px solid ${ADMOB}28` }}>
+                <p className="font-body text-[0.5625rem] uppercase tracking-widest font-semibold" style={{ color: `${ADMOB}99` }}>
+                  AdMob
+                </p>
+                <p className="font-headline text-base font-bold" style={{ color: ADMOB }}>
+                  <AnimatedNumber value={admobEarnings} fmt={n => usd(n)} />
+                </p>
+                <div className="flex items-center gap-1.5">
+                  <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-3 h-3 flex-none" style={{ color: `${ADMOB}70` }}>
+                    <circle cx="6" cy="6" r="5" /><path strokeLinecap="round" d="M6 3.5V6l1.5 1.5" />
+                  </svg>
+                  <p className="font-body text-[0.5625rem]" style={{ color: DIM }}>
+                    ~{fmtDate(admobPay)}
+                  </p>
+                </div>
+              </div>
+
+              {/* Unity Ads */}
+              <div className="rounded-xl p-4 space-y-2"
+                style={{ background: `${UNITY}0d`, border: `1px solid ${UNITY}28` }}>
+                <p className="font-body text-[0.5625rem] uppercase tracking-widest font-semibold" style={{ color: `${UNITY}99` }}>
+                  Unity Ads
+                </p>
+                <p className="font-headline text-base font-bold" style={{ color: UNITY }}>
+                  <AnimatedNumber value={unityEarnings} fmt={n => usd(n)} />
+                </p>
+                <div className="flex items-center gap-1.5">
+                  <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-3 h-3 flex-none" style={{ color: `${UNITY}70` }}>
+                    <circle cx="6" cy="6" r="5" /><path strokeLinecap="round" d="M6 3.5V6l1.5 1.5" />
+                  </svg>
+                  <p className="font-body text-[0.5625rem]" style={{ color: DIM }}>
+                    ~{fmtDate(unityPay)}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Note */}
+            <p className="font-body text-[0.5625rem] leading-relaxed" style={{ color: "rgba(255,255,255,0.18)" }}>
+              Payment dates are estimates. AdMob pays ~21st of next month; Unity pays ~end of next month. Actual dates depend on your account settings and payment method.
+            </p>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 export default function IncomePage() {
-  const [rangeIdx,   setRangeIdx]   = useState(2); // 30D default (index 2 — Today is 0)
+  const [rangeIdx,   setRangeIdx]   = useState(3); // 30D default (Today=0, Yesterday=1, 7D=2, 30D=3)
   const [view,       setView]       = useState<"day"|"month">("day");
   const [chartType,  setChartType]  = useState<"area"|"bar">("area");
   const [network,    setNetwork]    = useState<"all"|"admob"|"unity">("all");
@@ -431,6 +577,9 @@ export default function IncomePage() {
             <KpiCard label="Avg. eCPM"      rawValue={totals.ecpm  ?? 0}    fmt={n => `$${n.toFixed(4)}`}            color={AMBER} sub="per 1K impressions" />
             <KpiCard label="Fill Rate"      rawValue={admob.fillRate ?? 0}  fmt={n => `${n.toFixed(1)}%`}            color="rgba(96,165,250,0.9)" sub="AdMob only" />
           </div>
+
+          {/* ── Upcoming payment ── */}
+          <UpcomingPaymentCard />
 
           {/* ── Chart ── */}
           {chartData.length > 0 && (
