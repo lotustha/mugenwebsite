@@ -259,15 +259,20 @@ function UpcomingPaymentCard() {
   const [data, setData]     = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
-  const now        = new Date();
-  const monthStart = fmt(new Date(now.getFullYear(), now.getMonth(), 1));
-  const todayStr   = fmt(now);
+  const now = new Date();
 
-  // NET 60 payment cycle — both AdMob and Unity pay 2 months after the earning month
-  // e.g. May earnings → paid in July
-  const admobPay = new Date(now.getFullYear(), now.getMonth() + 2, 21);  // ~21st, 2 months out
-  const unityPay = new Date(now.getFullYear(), now.getMonth() + 3, 0);  // last day, 2 months out
+  // Upcoming payment = LAST month's earnings (NET 60: paid 2 months after earning month)
+  // e.g. it's May → April earnings → paid ~June 21 (AdMob) / ~June 30 (Unity)
+  const monthStart = fmt(new Date(now.getFullYear(), now.getMonth() - 1, 1));     // 1st of last month
+  const monthEnd   = fmt(new Date(now.getFullYear(), now.getMonth(), 0));          // last day of last month
+  const todayStr   = monthEnd; // fetch only through end of last month
+
+  const admobPay = new Date(now.getFullYear(), now.getMonth() + 1, 21); // 21st of next month (2 months after last month)
+  const unityPay = new Date(now.getFullYear(), now.getMonth() + 2, 0);  // last day of next month (2 months after last month)
   const fmtDate  = (d: Date) => d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+
+  const prevMonthName = new Date(now.getFullYear(), now.getMonth() - 1, 1)
+    .toLocaleString("default", { month: "long", year: "numeric" });
 
   useEffect(() => {
     const key    = CACHE_KEY(monthStart, todayStr);
@@ -285,7 +290,6 @@ function UpcomingPaymentCard() {
   const THRESHOLD     = 100; // $100 minimum payout threshold
   const progress      = Math.min((combined / THRESHOLD) * 100, 100);
   const thresholdMet  = combined >= THRESHOLD;
-  const monthName     = now.toLocaleString("default", { month: "long" });
 
   return (
     <div className="rounded-2xl overflow-hidden" style={{ background: CARD, border: `1px solid ${BDR}` }}>
@@ -300,7 +304,7 @@ function UpcomingPaymentCard() {
           </div>
           <p className="font-headline text-sm font-semibold text-white">Upcoming Payment</p>
         </div>
-        <span className="font-body text-[0.625rem]" style={{ color: DIM }}>{monthName} earnings</span>
+        <span className="font-body text-[0.625rem]" style={{ color: DIM }}>{prevMonthName} earnings</span>
       </div>
 
       <div className="p-5 space-y-4">
