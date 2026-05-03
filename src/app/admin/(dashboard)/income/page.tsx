@@ -263,10 +263,10 @@ function UpcomingPaymentCard() {
   const monthStart = fmt(new Date(now.getFullYear(), now.getMonth(), 1));
   const todayStr   = fmt(now);
 
-  // Next estimated payment dates
-  // AdMob: ~21st of next month | Unity: ~last day of next month
-  const admobPay = new Date(now.getFullYear(), now.getMonth() + 1, 21);
-  const unityPay = new Date(now.getFullYear(), now.getMonth() + 2, 0); // last day of next month
+  // NET 60 payment cycle — both AdMob and Unity pay 2 months after the earning month
+  // e.g. May earnings → paid in July
+  const admobPay = new Date(now.getFullYear(), now.getMonth() + 2, 21);  // ~21st, 2 months out
+  const unityPay = new Date(now.getFullYear(), now.getMonth() + 3, 0);  // last day, 2 months out
   const fmtDate  = (d: Date) => d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 
   useEffect(() => {
@@ -390,7 +390,7 @@ function UpcomingPaymentCard() {
 
             {/* Note */}
             <p className="font-body text-[0.5625rem] leading-relaxed" style={{ color: "rgba(255,255,255,0.18)" }}>
-              Payment dates are estimates. AdMob pays ~21st of next month; Unity pays ~end of next month. Actual dates depend on your account settings and payment method.
+              Payment dates are estimates (NET 60 cycle). AdMob pays ~21st of the month after next; Unity pays ~end of the month after next. Actual dates depend on your account settings and payment method.
             </p>
           </>
         )}
