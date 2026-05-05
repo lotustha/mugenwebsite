@@ -37,16 +37,19 @@ export async function GET(req: Request) {
   const end   = searchParams.get("end")   ?? new Date().toISOString().slice(0, 10);
 
   try {
+    const clientId     = process.env.GOOGLE_CLIENT_ID     ?? "";
+    const clientSecret = process.env.GOOGLE_CLIENT_SECRET ?? "";
+
     const rows = await prisma.systemSetting.findMany({
-      where: { key: { in: ["admob_client_id","admob_client_secret","admob_refresh_token","admob_account_id"] } },
+      where: { key: { in: ["admob_refresh_token", "admob_account_id"] } },
     });
     const cfg = Object.fromEntries(rows.map(r => [r.key, r.value]));
 
-    if (!cfg.admob_client_id || !cfg.admob_client_secret || !cfg.admob_refresh_token || !cfg.admob_account_id) {
+    if (!clientId || !clientSecret || !cfg.admob_refresh_token || !cfg.admob_account_id) {
       return NextResponse.json({ configured: false, error: "AdMob credentials not set" });
     }
 
-    const token = await refreshAccessToken(cfg.admob_client_id, cfg.admob_client_secret, cfg.admob_refresh_token);
+    const token = await refreshAccessToken(clientId, clientSecret, cfg.admob_refresh_token);
 
     const [sy, sm, sd] = start.split("-").map(Number);
     const [ey, em, ed] = end.split("-").map(Number);
