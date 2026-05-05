@@ -73,12 +73,13 @@ async function getApps() {
 
 export default async function Home() {
   const apps = await getApps();
+  const featuredApp = apps.find((a: any) => a.featured) ?? null;
 
   return (
     <div className="min-h-screen">
 
       {/* ── Hero ── */}
-      <AppHero />
+      <AppHero featuredApp={featuredApp} />
 
       {/* ── App Showcase (primary section) ── */}
       <HomeAppsSection apps={apps} />

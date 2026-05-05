@@ -2,6 +2,7 @@ import { Metadata } from "next";
 import { notFound } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
+import AdUnit from "@/components/AdUnit";
 import { prisma } from "@/lib/prisma";
 
 interface PageProps {
@@ -81,18 +82,6 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   };
 }
 
-// ─── Ad slot ───────────────────────────────────────────────────────────────────
-function AdSlot({ label, className = "" }: { label: string; className?: string }) {
-  return (
-    <div className={`flex items-center justify-center rounded-xl border border-dashed ${className}`}
-      style={{ borderColor: "rgba(255,255,255,0.07)", background: "rgba(255,255,255,0.015)" }}>
-      <span className="font-body text-[10px] uppercase tracking-[0.2em] select-none"
-        style={{ color: "rgba(255,255,255,0.12)" }}>
-        Advertisement · {label}
-      </span>
-    </div>
-  );
-}
 
 // ─── Page ──────────────────────────────────────────────────────────────────────
 export default async function NewsArticlePage({ params }: PageProps) {
@@ -201,7 +190,8 @@ export default async function NewsArticlePage({ params }: PageProps) {
 
             {/* ── Main article ── */}
             <main className="min-w-0">
-              <AdSlot label="728×90 Leaderboard" className="h-[90px] mb-8" />
+              {/* Slot ID: AdSense → Ad units → Display ad → copy data-ad-slot value */}
+              <AdUnit slot="YOUR_LEADERBOARD_SLOT_ID" className="mb-8" />
 
               {post.summary && (
                 <p className="font-body text-lg leading-relaxed mb-8 font-medium"
@@ -214,7 +204,7 @@ export default async function NewsArticlePage({ params }: PageProps) {
                 <div className="article-body" dangerouslySetInnerHTML={{ __html: post.content }} />
               )}
 
-              <AdSlot label="In-Article 300×250" className="h-[250px] my-10" />
+              <AdUnit slot="YOUR_IN_ARTICLE_SLOT_ID" className="my-10" />
 
               <div className="pt-8 border-t flex flex-wrap gap-2" style={{ borderColor: "rgba(255,255,255,0.06)" }}>
                 {["Anime", "News", "2025"].map(tag => (
@@ -273,7 +263,7 @@ export default async function NewsArticlePage({ params }: PageProps) {
                 </div>
               </div>
 
-              <AdSlot label="300×600 Half Page" className="h-[300px]" />
+              <AdUnit slot="YOUR_SIDEBAR_SLOT_ID" />
 
               <div className="rounded-xl p-5 text-center"
                 style={{ background: "linear-gradient(135deg, rgba(139,92,246,0.12), rgba(217,70,239,0.08))", border: "1px solid rgba(139,92,246,0.2)" }}>

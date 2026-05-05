@@ -4,6 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { getAnimeInfo } from "@/lib/api";
 import AnimeEpisodeList from "@/components/AnimeEpisodeList";
+import AdUnit from "@/components/AdUnit";
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -161,6 +162,9 @@ export default async function AnimePage({ params }: PageProps) {
             </div>
           )}
 
+          {/* Ad — between synopsis and app CTA */}
+          <AdUnit slot="YOUR_ANIME_DETAIL_SLOT_ID" className="mb-6" />
+
           {/* App CTA — compact */}
           <div className="flex items-center gap-4 p-4 rounded-2xl mb-6"
             style={{ background: "rgba(139,92,246,0.1)", border: "1px solid rgba(139,92,246,0.2)" }}>
@@ -182,6 +186,9 @@ export default async function AnimePage({ params }: PageProps) {
 
           {/* Episode list */}
           <AnimeEpisodeList episodes={episodes} animeTitle={title} animeId={id} />
+
+          {/* Ad — below episode list */}
+          <AdUnit slot="YOUR_ANIME_EPISODES_SLOT_ID" className="mt-6" />
 
           <div className="h-6" />
         </div>

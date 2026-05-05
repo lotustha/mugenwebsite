@@ -14,6 +14,8 @@ const inter = Inter({
   weight: ["400", "500", "600", "700"],
 });
 
+const publisherId = process.env.NEXT_PUBLIC_ADSENSE_PUBLISHER_ID;
+
 export const metadata: Metadata = {
   title: "Mugen Anime - Your Gateway to Anime",
   description: "Discover and explore the best anime content. Download the Mugen Anime app from Google Play Store.",
@@ -23,6 +25,9 @@ export const metadata: Metadata = {
     type: "website",
     locale: "en_US",
   },
+  // AdSense site verification — tells Google this publisher ID owns this domain.
+  // Get this from AdSense → Sites → Add site → copy the ca-pub-XXXX value.
+  ...(publisherId ? { other: { "google-adsense-account": publisherId } } : {}),
 };
 
 export default function RootLayout({

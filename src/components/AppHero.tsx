@@ -1,8 +1,20 @@
 "use client";
 
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
+import Image from "next/image";
 import Link from "next/link";
+import { useState, useEffect } from "react";
 
+// ── Types ──────────────────────────────────────────────────────────────────────
+type Screenshot = { url: string; caption?: string | null };
+
+interface FeaturedApp {
+  name: string;
+  iconUrl?: string | null;
+  screenshots: Screenshot[];
+}
+
+// ── Constants ──────────────────────────────────────────────────────────────────
 const ANIME_CARDS = [
   "from-pink-500/50 to-purple-600/50",
   "from-blue-500/50 to-cyan-500/50",
@@ -12,73 +24,156 @@ const ANIME_CARDS = [
   "from-amber-500/50 to-orange-500/50",
 ];
 
-function PhoneMockup() {
+const FEATURES = ["HD Streaming", "Offline Download", "Sub & Dub", "No Ads"];
+const STATS = [
+  { value: "500K+", label: "Downloads" },
+  { value: "4.8★", label: "Rating" },
+  { value: "10K+", label: "Titles" },
+];
+
+// ── Fallback static screen ─────────────────────────────────────────────────────
+function StaticScreen() {
+  return (
+    <div>
+      <div className="px-4 pb-2 flex items-center justify-between">
+        <div>
+          <p className="font-headline text-[10px] text-primary font-bold tracking-widest uppercase">
+            Mugen
+          </p>
+          <p className="font-body text-text-main/40 text-[8px]">For You</p>
+        </div>
+        <div className="w-6 h-6 rounded-full bg-linear-to-br from-primary/40 to-tertiary/40 border border-primary/30" />
+      </div>
+
+      <div className="mx-3 h-28 rounded-2xl overflow-hidden relative mb-3">
+        <div className="absolute inset-0 bg-linear-to-br from-primary/30 via-surface-high to-tertiary/20" />
+        <div className="absolute inset-0 bg-linear-to-t from-background/80 to-transparent" />
+        <div className="absolute top-2 right-2">
+          <span className="px-1.5 py-0.5 bg-secondary/90 rounded text-[6px] font-bold text-white">
+            NEW
+          </span>
+        </div>
+        <div className="absolute bottom-2 left-3">
+          <p className="font-headline text-[9px] text-white font-bold">
+            Attack on Titan
+          </p>
+          <p className="font-body text-white/50 text-[7px]">EP 87 • HD Quality</p>
+        </div>
+      </div>
+
+      <div className="px-3 mb-2">
+        <p className="font-body text-[8px] text-text-main/40 mb-2 uppercase tracking-widest">
+          Trending Now
+        </p>
+        <div className="grid grid-cols-3 gap-1.5">
+          {ANIME_CARDS.map((color, i) => (
+            <div key={i} className={`h-12 rounded-xl bg-linear-to-br ${color}`} />
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Auto-scrolling app screenshots screen ──────────────────────────────────────
+function AppScreen({ app }: { app: FeaturedApp }) {
+  const shots = app.screenshots.slice(0, 6);
+  const [current, setCurrent] = useState(0);
+
+  useEffect(() => {
+    if (shots.length <= 1) return;
+    const id = setInterval(() => setCurrent((c) => (c + 1) % shots.length), 2800);
+    return () => clearInterval(id);
+  }, [shots.length]);
+
+  return (
+    <div className="h-full flex flex-col">
+      {/* Mini header */}
+      <div className="px-4 py-1.5 flex items-center justify-between flex-none">
+        <div>
+          <p className="font-headline text-[10px] text-primary font-bold tracking-widest uppercase">
+            {app.name}
+          </p>
+          <p className="font-body text-text-main/40 text-[8px]">Screenshots</p>
+        </div>
+        {app.iconUrl ? (
+          <div className="w-6 h-6 rounded-full overflow-hidden border border-primary/30 flex-none">
+            <Image
+              src={app.iconUrl}
+              alt={app.name}
+              width={24}
+              height={24}
+              className="w-full h-full object-cover"
+            />
+          </div>
+        ) : (
+          <div className="w-6 h-6 rounded-full bg-linear-to-br from-primary/40 to-tertiary/40 border border-primary/30" />
+        )}
+      </div>
+
+      {/* Screenshot viewport */}
+      <div className="flex-1 relative overflow-hidden min-h-0">
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={current}
+            initial={{ opacity: 0, scale: 1.04 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.97 }}
+            transition={{ duration: 0.45, ease: "easeInOut" }}
+            className="absolute inset-0"
+          >
+            <Image
+              src={shots[current].url}
+              alt={shots[current].caption || `${app.name} screenshot ${current + 1}`}
+              fill
+              className="object-cover"
+              sizes="240px"
+            />
+            <div className="absolute inset-x-0 bottom-0 h-14 bg-linear-to-t from-background/80 to-transparent pointer-events-none" />
+          </motion.div>
+        </AnimatePresence>
+
+        {shots.length > 1 && (
+          <div className="absolute bottom-2 left-0 right-0 flex justify-center gap-1 z-10 pointer-events-none">
+            {shots.map((_, i) => (
+              <div
+                key={i}
+                className={`rounded-full transition-all duration-300 ${
+                  i === current ? "w-4 h-1.5 bg-primary" : "w-1.5 h-1.5 bg-white/30"
+                }`}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── Phone shell (wraps either screen) ─────────────────────────────────────────
+function PhoneMockup({ app }: { app?: FeaturedApp | null }) {
+  const showApp = !!(app && app.screenshots.length > 0);
+
   return (
     <div className="relative">
       <div className="absolute inset-0 bg-primary/20 blur-[80px] scale-75 rounded-full" />
 
       <div className="relative w-[240px] h-[500px]">
         <div className="absolute inset-0 rounded-[2.8rem] bg-linear-to-b from-surface-high/80 to-surface-low border border-white/10 shadow-2xl overflow-hidden">
-          <div className="absolute inset-0 m-[3px] rounded-[2.5rem] overflow-hidden bg-background">
+          <div className="absolute inset-0 m-[3px] rounded-[2.5rem] overflow-hidden bg-background flex flex-col">
             {/* Notch */}
-            <div className="h-8 flex items-center justify-center">
+            <div className="h-8 flex items-center justify-center flex-none">
               <div className="w-20 h-3.5 bg-surface-low rounded-full" />
             </div>
 
-            {/* App header */}
-            <div className="px-4 pb-2 flex items-center justify-between">
-              <div>
-                <p className="font-headline text-[10px] text-primary font-bold tracking-widest uppercase">
-                  Mugen
-                </p>
-                <p className="font-body text-text-main/40 text-[8px]">
-                  For You
-                </p>
-              </div>
-              <div className="w-6 h-6 rounded-full bg-linear-to-br from-primary/40 to-tertiary/40 border border-primary/30" />
-            </div>
-
-            {/* Featured banner */}
-            <div className="mx-3 h-28 rounded-2xl overflow-hidden relative mb-3">
-              <div className="absolute inset-0 bg-linear-to-br from-primary/30 via-surface-high to-tertiary/20" />
-              <div className="absolute inset-0 bg-linear-to-t from-background/80 to-transparent" />
-              <div className="absolute top-2 right-2">
-                <span className="px-1.5 py-0.5 bg-secondary/90 rounded text-[6px] font-bold text-white">
-                  NEW
-                </span>
-              </div>
-              <div className="absolute bottom-2 left-3">
-                <p className="font-headline text-[9px] text-white font-bold">
-                  Attack on Titan
-                </p>
-                <p className="font-body text-white/50 text-[7px]">
-                  EP 87 • HD Quality
-                </p>
-              </div>
-            </div>
-
-            {/* Anime grid */}
-            <div className="px-3 mb-2">
-              <p className="font-body text-[8px] text-text-main/40 mb-2 uppercase tracking-widest">
-                Trending Now
-              </p>
-              <div className="grid grid-cols-3 gap-1.5">
-                {ANIME_CARDS.map((color, i) => (
-                  <div
-                    key={i}
-                    className={`h-12 rounded-xl bg-linear-to-br ${color}`}
-                  />
-                ))}
-              </div>
+            {/* Screen content */}
+            <div className="flex-1 overflow-hidden relative min-h-0">
+              {showApp ? <AppScreen app={app!} /> : <StaticScreen />}
             </div>
 
             {/* Bottom nav */}
-            <div className="absolute bottom-0 inset-x-0 h-12 bg-surface-low/95 backdrop-blur-md border-t border-white/5 flex items-center justify-around px-2">
-              <svg
-                className="w-4 h-4 text-primary"
-                viewBox="0 0 24 24"
-                fill="currentColor"
-              >
+            <div className="h-12 bg-surface-low/95 backdrop-blur-md border-t border-white/5 flex items-center justify-around px-2 flex-none">
+              <svg className="w-4 h-4 text-primary" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z" />
               </svg>
               <svg
@@ -121,31 +216,20 @@ function PhoneMockup() {
           className="absolute -right-16 top-14 liquid-glass rounded-xl px-3 py-2"
         >
           <p className="font-body text-[9px] text-text-main/50">New Episode</p>
-          <p className="font-headline text-[11px] font-bold text-primary">
-            One Piece
-          </p>
+          <p className="font-headline text-[11px] font-bold text-primary">One Piece</p>
         </motion.div>
 
         {/* Floating badge: live */}
         <motion.div
           animate={{ y: [0, 6, 0] }}
-          transition={{
-            duration: 3.5,
-            repeat: Infinity,
-            ease: "easeInOut",
-            delay: 0.7,
-          }}
+          transition={{ duration: 3.5, repeat: Infinity, ease: "easeInOut", delay: 0.7 }}
           className="absolute -left-18 bottom-24 liquid-glass rounded-xl px-3 py-2"
         >
           <div className="flex items-center gap-1.5">
             <span className="w-1.5 h-1.5 bg-green-400 rounded-full animate-pulse" />
-            <p className="font-headline text-[11px] font-bold text-text-main">
-              HD Online
-            </p>
+            <p className="font-headline text-[11px] font-bold text-text-main">HD Online</p>
           </div>
-          <p className="font-body text-[9px] text-text-main/40 mt-0.5">
-            10K+ watching
-          </p>
+          <p className="font-body text-[9px] text-text-main/40 mt-0.5">10K+ watching</p>
         </motion.div>
 
         <div className="absolute -bottom-3 left-1/2 -translate-x-1/2 w-16 h-1 bg-white/15 rounded-full" />
@@ -154,14 +238,8 @@ function PhoneMockup() {
   );
 }
 
-const FEATURES = ["HD Streaming", "Offline Download", "Sub & Dub", "No Ads"];
-const STATS = [
-  { value: "500K+", label: "Downloads" },
-  { value: "4.8★", label: "Rating" },
-  { value: "10K+", label: "Titles" },
-];
-
-export default function AppHero() {
+// ── Hero section ───────────────────────────────────────────────────────────────
+export default function AppHero({ featuredApp }: { featuredApp?: FeaturedApp | null }) {
   return (
     <section className="relative min-h-[90vh] flex items-start overflow-hidden bg-background">
       {/* Background orbs */}
@@ -201,30 +279,20 @@ export default function AppHero() {
             <div className="flex gap-8 mb-10">
               {STATS.map((s) => (
                 <div key={s.label}>
-                  <p className="font-headline text-2xl font-bold text-primary">
-                    {s.value}
-                  </p>
-                  <p className="font-body text-text-main/35 text-sm mt-0.5">
-                    {s.label}
-                  </p>
+                  <p className="font-headline text-2xl font-bold text-primary">{s.value}</p>
+                  <p className="font-body text-text-main/35 text-sm mt-0.5">{s.label}</p>
                 </div>
               ))}
             </div>
 
-            {/* CTA buttons */}
+            {/* CTA */}
             <div className="flex flex-wrap gap-4 mb-8">
               <Link
                 href="/anime"
                 className="inline-flex items-center gap-2 px-6 py-3 liquid-glass rounded-md font-headline font-semibold text-text-main border border-white/10 hover:border-primary/30 hover:bg-primary/5 transition-all duration-200 hover:scale-105 active:scale-95 cursor-pointer"
               >
                 Browse Anime
-                <svg
-                  className="w-4 h-4"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                >
+                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                   <path d="m9 18 6-6-6-6" />
                 </svg>
               </Link>
@@ -259,7 +327,7 @@ export default function AppHero() {
             transition={{ duration: 0.9, ease: "easeOut", delay: 0.2 }}
             className="flex justify-center lg:justify-end"
           >
-            <PhoneMockup />
+            <PhoneMockup app={featuredApp} />
           </motion.div>
         </div>
       </div>

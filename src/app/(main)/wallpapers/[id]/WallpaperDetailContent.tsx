@@ -5,6 +5,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getPreview } from "@/lib/preview-store";
+import AdUnit from "@/components/AdUnit";
 
 // ─── Skeleton ─────────────────────────────────────────────────────────────────
 
@@ -76,6 +77,135 @@ function RelatedCard({ w }: { w: any }) {
       <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-200 rounded-xl"
         style={{ border: "2px solid rgba(139,92,246,0.6)" }} />
     </Link>
+  );
+}
+
+// ─── Download gate ────────────────────────────────────────────────────────────
+// Shows an ad overlay with a countdown when user clicks Download.
+// After the countdown the download starts automatically.
+
+function DownloadGate({ fileUrl, title }: { fileUrl: string; title: string }) {
+  const [open, setOpen]           = useState(false);
+  const [countdown, setCountdown] = useState(5);
+  const fileUrlRef = useRef(fileUrl);
+  fileUrlRef.current = fileUrl;
+
+  const handleOpen = () => {
+    setCountdown(5);
+    setOpen(true);
+  };
+
+  useEffect(() => {
+    if (!open) return;
+    if (countdown > 0) {
+      const t = setTimeout(() => setCountdown(c => c - 1), 1000);
+      return () => clearTimeout(t);
+    }
+    // countdown reached 0 — trigger download
+    const a = document.createElement("a");
+    a.href = fileUrlRef.current;
+    a.download = "";
+    a.target = "_blank";
+    a.rel = "noopener noreferrer";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    const t = setTimeout(() => setOpen(false), 1000);
+    return () => clearTimeout(t);
+  }, [open, countdown]);
+
+  return (
+    <>
+      {/* Download button */}
+      <button
+        type="button"
+        onClick={handleOpen}
+        className="flex items-center justify-center gap-3 w-full py-4 rounded-2xl font-headline text-base font-bold cursor-pointer transition-all duration-200 hover:brightness-110 hover:shadow-lg active:scale-[0.98]"
+        style={{
+          background: "linear-gradient(135deg,#8B5CF6,#D946EF)",
+          color: "white",
+          boxShadow: "0 8px 32px rgba(139,92,246,0.35)",
+        }}
+      >
+        <svg viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5">
+          <path d="M10.75 2.75a.75.75 0 0 0-1.5 0v8.614L6.295 8.235a.75.75 0 1 0-1.09 1.03l4.25 4.5a.75.75 0 0 0 1.09 0l4.25-4.5a.75.75 0 0 0-1.09-1.03l-2.955 3.129V2.75Z" />
+          <path d="M3.5 12.75a.75.75 0 0 0-1.5 0v2.5A2.75 2.75 0 0 0 4.75 18h10.5A2.75 2.75 0 0 0 18 15.25v-2.5a.75.75 0 0 0-1.5 0v2.5c0 .69-.56 1.25-1.25 1.25H4.75c-.69 0-1.25-.56-1.25-1.25v-2.5Z" />
+        </svg>
+        Free Download
+      </button>
+
+      {/* Ad overlay */}
+      {open && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4">
+          {/* Backdrop */}
+          <div
+            className="absolute inset-0"
+            style={{ background: "rgba(6,3,18,0.82)", backdropFilter: "blur(6px)" }}
+            onClick={() => setOpen(false)}
+          />
+
+          <div
+            className="relative w-full max-w-sm rounded-2xl overflow-hidden"
+            style={{
+              background: "rgba(9,19,40,0.98)",
+              border: "1px solid rgba(139,92,246,0.3)",
+              boxShadow: "0 24px 80px rgba(0,0,0,0.7), 0 0 0 1px rgba(217,70,239,0.1)",
+            }}
+          >
+            {/* Header */}
+            <div
+              className="flex items-center justify-between px-5 py-3 border-b"
+              style={{ borderColor: "rgba(255,255,255,0.07)" }}
+            >
+              <p className="font-body text-xs uppercase tracking-widest font-semibold" style={{ color: "rgba(222,229,255,0.3)" }}>
+                Advertisement
+              </p>
+              <button
+                type="button"
+                onClick={() => setOpen(false)}
+                className="w-6 h-6 rounded-full flex items-center justify-center transition-colors hover:bg-white/10 cursor-pointer"
+                style={{ color: "rgba(222,229,255,0.3)" }}
+              >
+                <svg viewBox="0 0 16 16" fill="currentColor" className="w-3 h-3">
+                  <path d="M2.22 2.22a.75.75 0 0 1 1.06 0L8 6.94l4.72-4.72a.75.75 0 1 1 1.06 1.06L9.06 8l4.72 4.72a.75.75 0 1 1-1.06 1.06L8 9.06l-4.72 4.72a.75.75 0 0 1-1.06-1.06L6.94 8 2.22 3.28a.75.75 0 0 1 0-1.06Z" />
+                </svg>
+              </button>
+            </div>
+
+            {/* Ad unit — slot ID: AdSense → Ad units → Display ad */}
+            <div className="px-4 pt-4">
+              <AdUnit slot="YOUR_DOWNLOAD_GATE_SLOT_ID" className="min-h-[100px]" />
+            </div>
+
+            {/* Countdown footer */}
+            <div className="px-5 py-4 text-center">
+              {countdown > 0 ? (
+                <p className="font-body text-sm" style={{ color: "rgba(222,229,255,0.5)" }}>
+                  Preparing your download in{" "}
+                  <span
+                    className="font-headline font-bold text-xl tabular-nums"
+                    style={{ color: "#c4b5fd" }}
+                  >
+                    {countdown}
+                  </span>
+                  s…
+                </p>
+              ) : (
+                <div className="flex items-center justify-center gap-2" style={{ color: "#34d399" }}>
+                  <svg viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
+                    <path fillRule="evenodd" d="M10 18a8 8 0 1 0 0-16 8 8 0 0 0 0 16Zm3.857-9.809a.75.75 0 0 0-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 1 0-1.06 1.061l2.5 2.5a.75.75 0 0 0 1.137-.089l4-5.5Z" clipRule="evenodd" />
+                  </svg>
+                  <span className="font-headline text-sm font-semibold">Starting download…</span>
+                </div>
+              )}
+              <p className="font-body text-[0.6875rem] mt-1.5" style={{ color: "rgba(222,229,255,0.2)" }}>
+                {title}
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 }
 
@@ -254,20 +384,11 @@ export default function WallpaperDetailContent({ id }: { id: string }) {
         {/* Divider */}
         <div style={{ height: "1px", background: "rgba(255,255,255,0.06)" }} />
 
-        {/* Download CTA */}
-        <a href={wallpaper.fileUrl} download target="_blank" rel="noopener noreferrer"
-          className="flex items-center justify-center gap-3 w-full py-4 rounded-2xl font-headline text-base font-bold cursor-pointer transition-all duration-200 hover:brightness-110 hover:shadow-lg active:scale-[0.98]"
-          style={{
-            background: "linear-gradient(135deg,#8B5CF6,#D946EF)",
-            color: "white",
-            boxShadow: "0 8px 32px rgba(139,92,246,0.35)",
-          }}>
-          <svg viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5">
-            <path d="M10.75 2.75a.75.75 0 0 0-1.5 0v8.614L6.295 8.235a.75.75 0 1 0-1.09 1.03l4.25 4.5a.75.75 0 0 0 1.09 0l4.25-4.5a.75.75 0 0 0-1.09-1.03l-2.955 3.129V2.75Z" />
-            <path d="M3.5 12.75a.75.75 0 0 0-1.5 0v2.5A2.75 2.75 0 0 0 4.75 18h10.5A2.75 2.75 0 0 0 18 15.25v-2.5a.75.75 0 0 0-1.5 0v2.5c0 .69-.56 1.25-1.25 1.25H4.75c-.69 0-1.25-.56-1.25-1.25v-2.5Z" />
-          </svg>
-          Free Download
-        </a>
+        {/* Inline ad — slot ID: AdSense → Ad units → Display ad */}
+        <AdUnit slot="YOUR_WALLPAPER_DETAIL_SLOT_ID" className="rounded-xl overflow-hidden" />
+
+        {/* Download CTA — opens ad gate with countdown */}
+        <DownloadGate fileUrl={wallpaper.fileUrl} title={wallpaper.title} />
 
         {/* DMCA */}
         <div className="flex justify-end">
