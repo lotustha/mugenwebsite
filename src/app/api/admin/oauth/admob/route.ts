@@ -38,7 +38,7 @@ export async function GET() {
     client_id:     clientId,
     redirect_uri:  redirectUri,
     response_type: "code",
-    scope:         "https://www.googleapis.com/auth/admob.readonly",
+    scope:         "https://www.googleapis.com/auth/admob.readonly email",
     access_type:   "offline",
     prompt:        "consent",    // always show consent to guarantee a refresh_token
     state,

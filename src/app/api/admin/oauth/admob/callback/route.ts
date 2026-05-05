@@ -81,8 +81,14 @@ export async function GET(req: Request) {
       headers: { Authorization: `Bearer ${tokens.access_token}` },
     });
     const info = await infoRes.json();
-    if (info.email) accountEmail = info.email;
-  } catch { /* non-fatal */ }
+    if (info.email) {
+      accountEmail = info.email;
+    } else {
+      console.warn("[admob-oauth] userinfo returned no email:", info);
+    }
+  } catch (e) {
+    console.warn("[admob-oauth] userinfo fetch failed:", e);
+  }
 
   // ── Step 4: Persist in SystemSetting ─────────────────────────────────────────
   const toSave: Record<string, string> = {
