@@ -1,7 +1,6 @@
-# MugenAnime — Flutter App API Guide
+# MugenAnime — Flutter API Guide
 
-Complete reference for building the MugenAnime Flutter app.
-Use this document to understand all available endpoints, response schemas, Firebase push notification setup, and deep-link routing.
+Reference for posts, wallpapers, push notifications, and in-app messages.
 
 ---
 
@@ -10,203 +9,24 @@ Use this document to understand all available endpoints, response schemas, Fireb
 ```dart
 // lib/config/app_config.dart
 class AppConfig {
-  static const String baseUrl = 'https://mugenanime.com'; // change to your VPS domain
+  static const String baseUrl      = 'https://mugenanime.com';
   static const String deepLinkScheme = 'mugenanime';
 }
 ```
 
 ---
 
-## 1. Anime Endpoints
+## 1. Posts Endpoints
 
-### 1.1 Recently Added Anime
-```
-GET /api/anime/recent
-```
-**Response:** `List<AnimeItem>`
-
-### 1.2 New Releases
-```
-GET /api/anime/new
-```
-**Response:** `List<AnimeItem>`
-
-### 1.3 Spotlight / Featured
-```
-GET /api/anime/spotlight
-```
-**Response:** `List<SpotlightItem>`
-
-### 1.4 Weekly Schedule
-```
-GET /api/anime/schedule
-```
-**Response:**
-```json
-{
-  "monday":    [{ "id": "...", "name": "...", "jname": "...", "time": "10:30" }],
-  "tuesday":   [...],
-  "wednesday": [...],
-  "thursday":  [...],
-  "friday":    [...],
-  "saturday":  [...],
-  "sunday":    [...]
-}
-```
-
-### 1.5 Anime Detail + Episodes
-```
-GET /api/anime/info?id={animeId}
-```
-**Response:**
-```json
-{
-  "id": "one-piece",
-  "title": "One Piece",
-  "name": "One Piece",
-  "image": "https://...",
-  "poster": "https://...",
-  "cover": "https://...",
-  "description": "...",
-  "synopsis": "...",
-  "status": "Ongoing",
-  "genres": ["Action", "Adventure"],
-  "episodes": [
-    {
-      "number": 1110,
-      "title": "Episode Title",
-      "episodeId": "one-piece-ep-1110",
-      "id": "one-piece-ep-1110"
-    }
-  ]
-}
-```
-
-### 1.6 Search Anime
-```
-GET /api/anime/search?query={query}
-```
-**Response:** `List<AnimeItem>`
-
-### AnimeItem Dart Model
-```dart
-class AnimeItem {
-  final String id;
-  final String? animeId;
-  final String? title;
-  final String? name;
-  final String? image;
-  final String? poster;
-  final String? thumbnail;
-  final String? status;
-  final int? episodes;
-
-  String get displayTitle => title ?? name ?? '';
-  String get displayImage => image ?? poster ?? thumbnail ?? '';
-  String get displayId => id ?? animeId ?? '';
-
-  AnimeItem.fromJson(Map<String, dynamic> j)
-    : id        = j['id'] ?? j['animeId'] ?? '',
-      animeId   = j['animeId'],
-      title     = j['title'],
-      name      = j['name'],
-      image     = j['image'],
-      poster    = j['poster'],
-      thumbnail = j['thumbnail'],
-      status    = j['status'],
-      episodes  = j['episodes'];
-}
-```
-
----
-
-## 2. Wallpaper Endpoints
-
-### 2.1 List Wallpapers
-```
-GET /api/wallpapers
-GET /api/wallpapers?category={slug}
-GET /api/wallpapers?tag={slug}
-GET /api/wallpapers?type=IMAGE
-GET /api/wallpapers?type=VIDEO
-GET /api/wallpapers?limit=20&page=1
-```
-**Response:** `List<Wallpaper>`
-
-### 2.2 Single Wallpaper
-```
-GET /api/wallpapers/{id}
-```
-**Response:**
-```json
-{
-  "id": "uuid",
-  "title": "Demon Slayer Epic",
-  "description": "...",
-  "fileUrl": "https://supabase.co/storage/v1/object/public/...",
-  "type": "IMAGE",
-  "downloadsCount": 1240,
-  "createdAt": "2025-01-01T00:00:00Z",
-  "categories": [{ "id": "uuid", "name": "Anime", "slug": "anime" }],
-  "tags": [{ "id": "uuid", "name": "demon slayer", "slug": "demon-slayer" }]
-}
-```
-
-### Wallpaper Dart Model
-```dart
-enum WallpaperType { IMAGE, VIDEO }
-
-class Wallpaper {
-  final String id;
-  final String title;
-  final String? description;
-  final String fileUrl;
-  final WallpaperType type;
-  final int downloadsCount;
-  final DateTime createdAt;
-  final List<WallpaperCategory> categories;
-  final List<WallpaperTag> tags;
-
-  bool get isVideo => type == WallpaperType.VIDEO;
-
-  Wallpaper.fromJson(Map<String, dynamic> j)
-    : id             = j['id'],
-      title          = j['title'],
-      description    = j['description'],
-      fileUrl        = j['fileUrl'] ?? j['file_url'],
-      type           = (j['type'] ?? 'IMAGE') == 'VIDEO' ? WallpaperType.VIDEO : WallpaperType.IMAGE,
-      downloadsCount = j['downloadsCount'] ?? j['downloads_count'] ?? 0,
-      createdAt      = DateTime.parse(j['createdAt'] ?? j['created_at']),
-      categories     = (j['categories'] as List? ?? []).map((c) => WallpaperCategory.fromJson(c)).toList(),
-      tags           = (j['tags'] as List? ?? []).map((t) => WallpaperTag.fromJson(t)).toList();
-}
-
-class WallpaperCategory {
-  final String id, name, slug;
-  WallpaperCategory.fromJson(Map<String, dynamic> j)
-    : id = j['id'], name = j['name'], slug = j['slug'];
-}
-
-class WallpaperTag {
-  final String id, name, slug;
-  WallpaperTag.fromJson(Map<String, dynamic> j)
-    : id = j['id'], name = j['name'], slug = j['slug'];
-}
-```
-
----
-
-## 3. News / Posts Endpoints
-
-### 3.1 List Posts
+### List Posts
 ```
 GET /api/posts
 GET /api/posts?limit=20&page=1
-GET /api/posts?exclude={slug}    ← exclude a slug from results
+GET /api/posts?exclude={slug}
 ```
 **Response:** `List<Post>`
 
-### 3.2 Single Post
+### Single Post
 ```
 GET /api/posts/{slug}
 ```
@@ -232,80 +52,178 @@ class Post {
   final DateTime createdAt;
 
   Post.fromJson(Map<String, dynamic> j)
-    : id              = j['id'],
-      title           = j['title'],
-      slug            = j['slug'],
-      summary         = j['summary'] ?? '',
-      content         = j['content'],
-      featuredImage   = j['featuredImage'] ?? j['featured_image'],
+    : id               = j['id'],
+      title            = j['title'],
+      slug             = j['slug'],
+      summary          = j['summary'] ?? '',
+      content          = j['content'],
+      featuredImage    = j['featuredImage'] ?? j['featured_image'],
       featuredImageAlt = j['featuredImageAlt'] ?? j['featured_image_alt'],
-      createdAt       = DateTime.parse(j['createdAt'] ?? j['created_at']);
+      createdAt        = DateTime.parse(j['createdAt'] ?? j['created_at']);
 }
 ```
 
 ---
 
-## 4. Apps Endpoints
+## 2. Wallpapers Endpoints
 
-### 4.1 List Apps
+### List Wallpapers
 ```
-GET /api/apps
+GET /api/wallpapers
+GET /api/wallpapers?category={slug}
+GET /api/wallpapers?tag={slug}
+GET /api/wallpapers?type=IMAGE
+GET /api/wallpapers?type=VIDEO
+GET /api/wallpapers?limit=20&page=1
 ```
-**Response:** `List<App>` — sorted by featured first, then newest
+**Response:** `List<Wallpaper>`
 
-### 4.2 Single App
+### Single Wallpaper
 ```
-GET /api/apps/{slug}     ← slug-based (SEO friendly)
-GET /api/apps/{uuid}     ← UUID fallback
+GET /api/wallpapers/{id}
 ```
 **Response:**
 ```json
 {
   "id": "uuid",
-  "slug": "mugen-anime",
-  "name": "MugenAnime",
-  "tagline": "Watch anime without limits",
-  "description": "Full description...",
-  "category": "Entertainment",
-  "iconUrl": "https://...",
-  "bannerUrl": "https://...",
-  "videoUrl": "https://youtube.com/...",
-  "version": "2.1.0",
-  "size": "45 MB",
-  "packageName": "com.mugenanime.app",
-  "published": true,
-  "featured": true,
-  "links": [
-    { "id": "uuid", "platform": "PlayStore", "url": "https://play.google.com/..." },
-    { "id": "uuid", "platform": "APK", "url": "https://..." }
-  ],
-  "screenshots": [
-    { "id": "uuid", "url": "https://...", "caption": "Home screen", "order": 0 }
-  ],
-  "faqs": [
-    { "id": "uuid", "question": "Is it free?", "answer": "Yes, completely free.", "order": 0 }
-  ]
+  "title": "Demon Slayer Epic",
+  "description": "...",
+  "fileUrl": "https://supabase.co/storage/v1/object/public/...",
+  "type": "IMAGE",
+  "downloadsCount": 1240,
+  "createdAt": "2025-01-01T00:00:00Z",
+  "categories": [{ "id": "uuid", "name": "Anime", "slug": "anime" }],
+  "tags":       [{ "id": "uuid", "name": "demon slayer", "slug": "demon-slayer" }]
+}
+```
+
+### Wallpaper Dart Models
+```dart
+enum WallpaperType { IMAGE, VIDEO }
+
+class Wallpaper {
+  final String id, title, fileUrl;
+  final String? description;
+  final WallpaperType type;
+  final int downloadsCount;
+  final DateTime createdAt;
+  final List<WallpaperCategory> categories;
+  final List<WallpaperTag> tags;
+
+  bool get isVideo => type == WallpaperType.VIDEO;
+
+  Wallpaper.fromJson(Map<String, dynamic> j)
+    : id             = j['id'],
+      title          = j['title'],
+      description    = j['description'],
+      fileUrl        = j['fileUrl'] ?? j['file_url'],
+      type           = (j['type'] ?? 'IMAGE') == 'VIDEO'
+                         ? WallpaperType.VIDEO
+                         : WallpaperType.IMAGE,
+      downloadsCount = j['downloadsCount'] ?? j['downloads_count'] ?? 0,
+      createdAt      = DateTime.parse(j['createdAt'] ?? j['created_at']),
+      categories     = (j['categories'] as List? ?? [])
+                         .map((c) => WallpaperCategory.fromJson(c)).toList(),
+      tags           = (j['tags'] as List? ?? [])
+                         .map((t) => WallpaperTag.fromJson(t)).toList();
+}
+
+class WallpaperCategory {
+  final String id, name, slug;
+  WallpaperCategory.fromJson(Map<String, dynamic> j)
+    : id = j['id'], name = j['name'], slug = j['slug'];
+}
+
+class WallpaperTag {
+  final String id, name, slug;
+  WallpaperTag.fromJson(Map<String, dynamic> j)
+    : id = j['id'], name = j['name'], slug = j['slug'];
 }
 ```
 
 ---
 
-## 5. Firebase Push Notifications
+## 3. HTTP Client
 
-### 5.1 Flutter Setup
+```dart
+// lib/services/api_service.dart
+import 'package:dio/dio.dart';
 
-**pubspec.yaml dependencies:**
-```yaml
-dependencies:
-  firebase_core: ^3.0.0
-  firebase_messaging: ^15.0.0
-  flutter_local_notifications: ^17.0.0
-  go_router: ^14.0.0        # for deep-link routing
-  dio: ^5.0.0               # for HTTP calls
+class ApiService {
+  static final Dio _dio = Dio(BaseOptions(
+    baseUrl:        AppConfig.baseUrl,
+    connectTimeout: const Duration(seconds: 10),
+    receiveTimeout: const Duration(seconds: 15),
+    headers: {'Content-Type': 'application/json'},
+  ));
+
+  // ── Posts ─────────────────────────────────────────────────────────────────
+  static Future<List<Post>> getPosts({int limit = 20, int page = 1}) async {
+    final res = await _dio.get('/api/posts',
+        queryParameters: {'limit': limit, 'page': page});
+    final list = res.data is List ? res.data : [];
+    return (list as List).map((e) => Post.fromJson(e)).toList();
+  }
+
+  static Future<Post> getPost(String slug) async {
+    final res = await _dio.get('/api/posts/$slug');
+    return Post.fromJson(res.data);
+  }
+
+  // ── Wallpapers ────────────────────────────────────────────────────────────
+  static Future<List<Wallpaper>> getWallpapers({
+    String? category,
+    String? tag,
+    String? type,
+    int limit = 20,
+    int page  = 1,
+  }) async {
+    final res = await _dio.get('/api/wallpapers', queryParameters: {
+      if (category != null) 'category': category,
+      if (tag != null)      'tag':      tag,
+      if (type != null)     'type':     type,
+      'limit': limit,
+      'page':  page,
+    });
+    final list = res.data is List ? res.data : (res.data['wallpapers'] ?? []);
+    return (list as List).map((e) => Wallpaper.fromJson(e)).toList();
+  }
+
+  static Future<Wallpaper> getWallpaper(String id) async {
+    final res = await _dio.get('/api/wallpapers/$id');
+    return Wallpaper.fromJson(res.data);
+  }
+}
 ```
 
-**AndroidManifest.xml** — add inside `<activity>`:
+**Error handling:**
+```dart
+try {
+  final post = await ApiService.getPost(slug);
+} on DioException catch (e) {
+  if (e.response?.statusCode == 404) {
+    // not found
+  }
+}
+```
+
+---
+
+## 4. Push Notifications — New Post / New Wallpaper
+
+### pubspec.yaml
+```yaml
+dependencies:
+  firebase_core:             ^3.0.0
+  firebase_messaging:        ^15.0.0
+  flutter_local_notifications: ^17.0.0
+  go_router:                 ^14.0.0
+  dio:                       ^5.0.0
+```
+
+### AndroidManifest.xml — deep-link intent filter
 ```xml
+<!-- inside <activity> -->
 <intent-filter>
   <action android:name="android.intent.action.VIEW"/>
   <category android:name="android.intent.category.DEFAULT"/>
@@ -314,52 +232,36 @@ dependencies:
 </intent-filter>
 ```
 
-**android/app/src/main/res/drawable/notification_icon.png** — add a white notification icon.
-
-### 5.2 Notification Channels (Android)
+### 4.1 Notification Channels
 ```dart
 // lib/services/notification_service.dart
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
-final FlutterLocalNotificationsPlugin flutterLocalNotifications =
+final FlutterLocalNotificationsPlugin localNotifications =
     FlutterLocalNotificationsPlugin();
 
 Future<void> createNotificationChannels() async {
-  const postsChannel = AndroidNotificationChannel(
+  final android = localNotifications
+      .resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin>();
+
+  await android?.createNotificationChannel(const AndroidNotificationChannel(
     'posts',
     'New Articles',
     description: 'Notifications for new anime news articles',
     importance: Importance.high,
-  );
-  const wallpapersChannel = AndroidNotificationChannel(
+  ));
+
+  await android?.createNotificationChannel(const AndroidNotificationChannel(
     'wallpapers',
     'New Wallpapers',
     description: 'Notifications for new anime wallpapers',
     importance: Importance.high,
-  );
-  const generalChannel = AndroidNotificationChannel(
-    'general',
-    'General',
-    description: 'General announcements',
-    importance: Importance.defaultImportance,
-  );
-
-  await flutterLocalNotifications
-      .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
-      ?.createNotificationChannel(postsChannel);
-  await flutterLocalNotifications
-      .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
-      ?.createNotificationChannel(wallpapersChannel);
-  await flutterLocalNotifications
-      .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
-      ?.createNotificationChannel(generalChannel);
+  ));
 }
 ```
 
-### 5.3 Topic Subscriptions
-
-The server sends to topics — **Flutter subscribes, no server token registration needed**.
-
+### 4.2 FCM Topics & Token Registration
 ```dart
 // lib/services/fcm_service.dart
 import 'package:firebase_messaging/firebase_messaging.dart';
@@ -368,54 +270,59 @@ import 'package:dio/dio.dart';
 class FcmService {
   static final _dio = Dio(BaseOptions(baseUrl: AppConfig.baseUrl));
 
-  /// Call once on app launch
   static Future<void> init() async {
     final messaging = FirebaseMessaging.instance;
 
-    // Request permission (iOS + Android 13+)
-    await messaging.requestPermission(
-      alert: true, badge: true, sound: true,
-    );
+    await messaging.requestPermission(alert: true, badge: true, sound: true);
 
-    // Subscribe to content topics
+    // Subscribe to content topics — no server token needed for topic messages
     await messaging.subscribeToTopic('new_posts');
     await messaging.subscribeToTopic('new_wallpapers');
-    await messaging.subscribeToTopic('all');
 
-    // Register token with server (for targeted notifications)
+    // Register device token so admin can target this device specifically
     final token = await messaging.getToken();
     if (token != null) await _registerToken(token);
-
-    // Re-register on token refresh
     messaging.onTokenRefresh.listen(_registerToken);
   }
 
   static Future<void> _registerToken(String token) async {
     try {
       await _dio.post('/api/notifications', data: {
-        'token': token,
+        'token':    token,
         'platform': 'android', // or 'ios'
       });
+    } catch (_) {}
+  }
+
+  static Future<void> unregister(String token) async {
+    try {
+      await _dio.delete('/api/notifications', data: {'token': token});
     } catch (_) {}
   }
 }
 ```
 
-### 5.4 Notification Payload Structure
+**Token registration endpoints:**
+```
+POST   /api/notifications   { "token": "...", "platform": "android" }
+DELETE /api/notifications   { "token": "..." }
+```
+Both respond `{ "ok": true }`.
 
-Every notification from MugenAnime has a `data` map:
+### 4.3 Notification Payload
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `type` | `"post"` \| `"wallpaper"` \| `"app"` | Content type |
-| `id` | `String` | UUID of the item |
-| `slug` | `String` | Slug (posts and apps) |
-| `title` | `String` | Content title |
-| `image` | `String` | Image URL |
-| `deepLink` | `String` | `mugenanime://post/slug` or `mugenanime://wallpaper/id` |
+Every FCM message from MugenAnime carries a `data` map:
 
-### 5.5 Handling Notifications + Deep Links
+| Field      | Values                         | Description                                |
+|------------|--------------------------------|--------------------------------------------|
+| `type`     | `"post"` \| `"wallpaper"`     | Content type                               |
+| `id`       | `String`                       | UUID of the item                           |
+| `slug`     | `String`                       | Slug (posts only)                          |
+| `title`    | `String`                       | Content title                              |
+| `image`    | `String`                       | Thumbnail URL                              |
+| `deepLink` | `mugenanime://post/slug` etc.  | Direct navigation target                   |
 
+### 4.4 Notification Handler
 ```dart
 // lib/services/notification_handler.dart
 import 'package:firebase_messaging/firebase_messaging.dart';
@@ -427,28 +334,22 @@ class NotificationHandler {
   static void init(GoRouter router) {
     _router = router;
 
-    // App in foreground
-    FirebaseMessaging.onMessage.listen(_handleForeground);
+    // Foreground — show a local notification so the user sees it
+    FirebaseMessaging.onMessage.listen(_showLocal);
 
-    // App in background — user tapped notification
-    FirebaseMessaging.onMessageOpenedApp.listen(_navigateFromMessage);
+    // Background — user tapped the notification banner
+    FirebaseMessaging.onMessageOpenedApp.listen(_navigate);
 
-    // App was terminated — opened via notification
+    // Terminated — app opened via notification
     FirebaseMessaging.instance.getInitialMessage().then((msg) {
-      if (msg != null) _navigateFromMessage(msg);
+      if (msg != null) _navigate(msg);
     });
   }
 
-  static void _handleForeground(RemoteMessage message) {
-    // Show a local notification so user sees it while app is open
-    _showLocalNotification(message);
-  }
-
-  static void _navigateFromMessage(RemoteMessage message) {
-    final data = message.data;
-    final type = data['type'] ?? '';
-    final id   = data['id'] ?? '';
-    final slug = data['slug'] ?? id;
+  static void _navigate(RemoteMessage message) {
+    final type = message.data['type'] ?? '';
+    final id   = message.data['id']   ?? '';
+    final slug = message.data['slug'] ?? id;
 
     switch (type) {
       case 'post':
@@ -457,75 +358,39 @@ class NotificationHandler {
       case 'wallpaper':
         _router.push('/wallpaper/$id');
         break;
-      case 'app':
-        _router.push('/app/$slug');
-        break;
     }
   }
 
-  static void _showLocalNotification(RemoteMessage message) {
-    final notification = message.notification;
-    if (notification == null) return;
-    // Use flutter_local_notifications to show in foreground
-    // Channel ID comes from data['channelId'] or notification.android?.channelId
+  static void _showLocal(RemoteMessage message) {
+    final n = message.notification;
+    if (n == null) return;
+    // Show via flutter_local_notifications
+    // Channel ID: message.data['channelId'] ?? n.android?.channelId ?? 'general'
   }
 }
 ```
 
-### 5.6 go_router Deep-Link Configuration
+### 4.5 When Notifications Fire
 
+| Event                                     | FCM Topic       | Channel ID   |
+|-------------------------------------------|-----------------|--------------|
+| New article published (RSS import)        | `new_posts`     | `posts`      |
+| New wallpaper uploaded via admin          | `new_wallpapers`| `wallpapers` |
+
+### 4.6 main.dart Setup
 ```dart
-// lib/router/app_router.dart
-import 'package:go_router/go_router.dart';
-
-final GoRouter appRouter = GoRouter(
-  initialLocation: '/',
-  routes: [
-    GoRoute(path: '/',          builder: (_, __) => const HomeScreen()),
-    GoRoute(path: '/anime',     builder: (_, __) => const AnimeBrowseScreen()),
-    GoRoute(path: '/wallpapers',builder: (_, __) => const WallpaperBrowseScreen()),
-    GoRoute(path: '/news',      builder: (_, __) => const NewsListScreen()),
-    GoRoute(path: '/apps',      builder: (_, __) => const AppsScreen()),
-
-    // Deep-link targets from notifications
-    GoRoute(
-      path: '/news/:slug',
-      builder: (_, state) => NewsDetailScreen(slug: state.pathParameters['slug']!),
-    ),
-    GoRoute(
-      path: '/wallpaper/:id',
-      builder: (_, state) => WallpaperDetailScreen(id: state.pathParameters['id']!),
-    ),
-    GoRoute(
-      path: '/anime/:id',
-      builder: (_, state) => AnimeDetailScreen(id: state.pathParameters['id']!),
-    ),
-    GoRoute(
-      path: '/app/:slug',
-      builder: (_, state) => AppDetailScreen(slug: state.pathParameters['slug']!),
-    ),
-  ],
-);
-```
-
-### 5.7 Main App Setup
-
-```dart
-// lib/main.dart
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 
-// Background message handler — must be top-level function
 @pragma('vm:entry-point')
-Future<void> _firebaseBackgroundHandler(RemoteMessage message) async {
+Future<void> _bgHandler(RemoteMessage message) async {
   await Firebase.initializeApp();
-  // You can process data here if needed
 }
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp();
-  FirebaseMessaging.onBackgroundMessage(_firebaseBackgroundHandler);
+  FirebaseMessaging.onBackgroundMessage(_bgHandler);
   await createNotificationChannels();
   await FcmService.init();
   runApp(const MugenAnimeApp());
@@ -533,7 +398,6 @@ void main() async {
 
 class MugenAnimeApp extends StatefulWidget {
   const MugenAnimeApp({super.key});
-
   @override
   State<MugenAnimeApp> createState() => _MugenAnimeAppState();
 }
@@ -556,204 +420,914 @@ class _MugenAnimeAppState extends State<MugenAnimeApp> {
 
 ---
 
-## 6. HTTP Client (Dio)
+## 5. In-App Messages (from Website → App)
 
-```dart
-// lib/services/api_service.dart
-import 'package:dio/dio.dart';
+The admin publishes an in-app message from the MugenAnime website. The app receives it via FCM and shows a non-dismissable overlay (banner or modal) while the app is open — **no system notification tray involved**.
 
-class ApiService {
-  static final Dio _dio = Dio(BaseOptions(
-    baseUrl: AppConfig.baseUrl,
-    connectTimeout: const Duration(seconds: 10),
-    receiveTimeout: const Duration(seconds: 15),
-    headers: {'Content-Type': 'application/json'},
-  ));
+### 5.1 How It Works
 
-  // ── Anime ────────────────────────────────────────────────────────────────
-  static Future<List<AnimeItem>> getRecentAnime() async {
-    final res = await _dio.get('/api/anime/recent');
-    final list = res.data is List ? res.data : (res.data['results'] ?? []);
-    return (list as List).map((e) => AnimeItem.fromJson(e)).toList();
-  }
-
-  static Future<List<AnimeItem>> getNewReleases() async {
-    final res = await _dio.get('/api/anime/new');
-    final list = res.data is List ? res.data : (res.data['results'] ?? []);
-    return (list as List).map((e) => AnimeItem.fromJson(e)).toList();
-  }
-
-  static Future<Map<String, dynamic>> getAnimeInfo(String id) async {
-    final res = await _dio.get('/api/anime/info', queryParameters: {'id': id});
-    return res.data;
-  }
-
-  static Future<List<AnimeItem>> searchAnime(String query) async {
-    final res = await _dio.get('/api/anime/search', queryParameters: {'query': query});
-    final list = res.data is List ? res.data : (res.data['results'] ?? res.data['suggestions'] ?? []);
-    return (list as List).map((e) => AnimeItem.fromJson(e)).toList();
-  }
-
-  // ── Wallpapers ───────────────────────────────────────────────────────────
-  static Future<List<Wallpaper>> getWallpapers({
-    String? category, String? tag, String? type, int limit = 20, int page = 1,
-  }) async {
-    final res = await _dio.get('/api/wallpapers', queryParameters: {
-      if (category != null) 'category': category,
-      if (tag != null) 'tag': tag,
-      if (type != null) 'type': type,
-      'limit': limit, 'page': page,
-    });
-    final list = res.data is List ? res.data : (res.data['wallpapers'] ?? []);
-    return (list as List).map((e) => Wallpaper.fromJson(e)).toList();
-  }
-
-  static Future<Wallpaper> getWallpaper(String id) async {
-    final res = await _dio.get('/api/wallpapers/$id');
-    return Wallpaper.fromJson(res.data);
-  }
-
-  // ── Posts ────────────────────────────────────────────────────────────────
-  static Future<List<Post>> getPosts({int limit = 20, int page = 1}) async {
-    final res = await _dio.get('/api/posts', queryParameters: {'limit': limit, 'page': page});
-    final list = res.data is List ? res.data : [];
-    return (list as List).map((e) => Post.fromJson(e)).toList();
-  }
-
-  static Future<Post> getPost(String slug) async {
-    final res = await _dio.get('/api/posts/$slug');
-    return Post.fromJson(res.data);
-  }
-
-  // ── Apps ─────────────────────────────────────────────────────────────────
-  static Future<List<dynamic>> getApps() async {
-    final res = await _dio.get('/api/apps');
-    return res.data is List ? res.data : [];
-  }
-
-  static Future<Map<String, dynamic>> getApp(String slug) async {
-    final res = await _dio.get('/api/apps/$slug');
-    return res.data;
-  }
-}
+```
+Admin writes message on website
+        ↓
+POST /api/admin/inapp-messages  (website → server)
+        ↓
+Server sends FCM data-only message (no notification block)
+  to topic: "inapp_{packageName}"  e.g. "inapp_com.mugenanime.app"
+        ↓
+Flutter receives RemoteMessage in foreground handler
+  data.type == "inapp"
+        ↓
+InAppMessageOverlay shown inside the app UI
 ```
 
----
+### 5.2 FCM Payload for In-App Messages
 
-## 7. Notification Registration API
-
-### Register FCM Token
-```
-POST /api/notifications
-Content-Type: application/json
-
-{
-  "token": "fcm_device_token_here",
-  "platform": "android"   // or "ios"
-}
-```
-**Response:** `{ "ok": true }`
-
-### Unregister FCM Token
-```
-DELETE /api/notifications
-Content-Type: application/json
-
-{ "token": "fcm_device_token_here" }
-```
-**Response:** `{ "ok": true }`
-
----
-
-## 8. When Notifications Are Sent
-
-| Event | Topic | Channel ID |
-|-------|-------|------------|
-| New article published via RSS import | `new_posts` | `posts` |
-| New wallpaper uploaded via admin | `new_wallpapers` | `wallpapers` |
-| Manual broadcast from admin panel | configurable | `general` |
-
----
-
-## 9. Error Handling
-
-All API endpoints return standard HTTP status codes:
-- `200` — success
-- `400` — bad request (missing required fields)
-- `404` — not found
-- `500` — server error
-
-Error response shape:
 ```json
-{ "error": "Description of what went wrong" }
-```
-
-**Dio error handling:**
-```dart
-try {
-  final data = await ApiService.getPost(slug);
-} on DioException catch (e) {
-  if (e.response?.statusCode == 404) {
-    // Handle not found
-  } else {
-    // Handle other errors
+{
+  "data": {
+    "type":       "inapp",
+    "style":      "banner",
+    "title":      "v2.2 Update Available",
+    "body":       "Tap to see what's new in the latest release.",
+    "imageUrl":   "https://mugenanime.com/images/update-banner.jpg",
+    "ctaLabel":   "See What's New",
+    "ctaAction":  "url",
+    "ctaTarget":  "https://mugenanime.com/apps/mugen-anime",
+    "dismissible": "true"
   }
 }
 ```
 
+| Field        | Values                                     | Description                               |
+|--------------|--------------------------------------------|-------------------------------------------|
+| `type`       | `"inapp"`                                  | Triggers overlay, not a tray notification |
+| `style`      | `"banner"` \| `"modal"`                    | Banner slides from top; modal is centred  |
+| `title`      | `String`                                   | Headline text                             |
+| `body`       | `String`                                   | Sub-text                                  |
+| `imageUrl`   | `String?`                                  | Optional hero image URL                   |
+| `ctaLabel`   | `String?`                                  | Button label                              |
+| `ctaAction`  | `"url"` \| `"deeplink"` \| `"dismiss"`    | What the button does                      |
+| `ctaTarget`  | `String?`                                  | URL or deep-link path                     |
+| `dismissible`| `"true"` \| `"false"`                     | Whether user can close it                 |
+
+### 5.3 Flutter — Subscribe to App Topic
+```dart
+// In FcmService.init(), add:
+const packageName = 'com.mugenanime.app'; // your actual package name
+await messaging.subscribeToTopic('inapp_${packageName.replaceAll('.', '_')}');
+// topic name must be alphanumeric + underscore, so dots → underscores
+// result: "inapp_com_mugenanime_app"
+```
+
+### 5.4 InAppMessage Model
+```dart
+class InAppMessage {
+  final String style;       // "banner" | "modal"
+  final String title;
+  final String body;
+  final String? imageUrl;
+  final String? ctaLabel;
+  final String? ctaAction;  // "url" | "deeplink" | "dismiss"
+  final String? ctaTarget;
+  final bool dismissible;
+
+  InAppMessage.fromData(Map<String, dynamic> d)
+    : style       = d['style']       ?? 'banner',
+      title       = d['title']       ?? '',
+      body        = d['body']        ?? '',
+      imageUrl    = d['imageUrl'],
+      ctaLabel    = d['ctaLabel'],
+      ctaAction   = d['ctaAction'],
+      ctaTarget   = d['ctaTarget'],
+      dismissible = (d['dismissible'] ?? 'true') == 'true';
+}
+```
+
+### 5.5 InAppOverlay Widget
+```dart
+// lib/widgets/in_app_overlay.dart
+import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
+import 'package:url_launcher/url_launcher.dart';
+
+class InAppOverlay extends StatefulWidget {
+  final InAppMessage message;
+  final VoidCallback onDismiss;
+
+  const InAppOverlay({
+    super.key,
+    required this.message,
+    required this.onDismiss,
+  });
+
+  @override
+  State<InAppOverlay> createState() => _InAppOverlayState();
+}
+
+class _InAppOverlayState extends State<InAppOverlay>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _ctrl;
+  late final Animation<Offset> _slide;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 350),
+    )..forward();
+
+    final isBanner = widget.message.style == 'banner';
+    _slide = Tween<Offset>(
+      begin: isBanner ? const Offset(0, -1) : const Offset(0, 0.08),
+      end: Offset.zero,
+    ).animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeOutCubic));
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _handleCta() async {
+    final action = widget.message.ctaAction;
+    final target = widget.message.ctaTarget ?? '';
+
+    if (action == 'url') {
+      await launchUrl(Uri.parse(target), mode: LaunchMode.externalApplication);
+    } else if (action == 'deeplink') {
+      if (mounted) context.push(target);
+    }
+    widget.onDismiss();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final m = widget.message;
+    final isBanner = m.style == 'banner';
+
+    return Align(
+      alignment: isBanner ? Alignment.topCenter : Alignment.center,
+      child: SlideTransition(
+        position: _slide,
+        child: Material(
+          color: Colors.transparent,
+          child: Container(
+            margin: EdgeInsets.fromLTRB(
+              16,
+              isBanner ? MediaQuery.of(context).padding.top + 8 : 0,
+              16,
+              0,
+            ),
+            decoration: BoxDecoration(
+              color: const Color(0xFF0F0A1E),
+              borderRadius: BorderRadius.circular(isBanner ? 16 : 20),
+              border: Border.all(color: const Color(0x338B5CF6)),
+              boxShadow: const [
+                BoxShadow(
+                  color: Color(0x448B5CF6),
+                  blurRadius: 32,
+                  offset: Offset(0, 8),
+                ),
+              ],
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                if (m.imageUrl != null)
+                  ClipRRect(
+                    borderRadius: const BorderRadius.vertical(
+                        top: Radius.circular(20)),
+                    child: Image.network(
+                      m.imageUrl!,
+                      height: 160,
+                      fit: BoxFit.cover,
+                    ),
+                  ),
+                Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(m.title,
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.bold,
+                                )),
+                          ),
+                          if (m.dismissible)
+                            GestureDetector(
+                              onTap: widget.onDismiss,
+                              child: const Icon(Icons.close,
+                                  color: Colors.white38, size: 18),
+                            ),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      Text(m.body,
+                          style: const TextStyle(
+                              color: Colors.white54, fontSize: 13)),
+                      if (m.ctaLabel != null) ...[
+                        const SizedBox(height: 14),
+                        SizedBox(
+                          width: double.infinity,
+                          child: TextButton(
+                            onPressed: _handleCta,
+                            style: TextButton.styleFrom(
+                              backgroundColor: const Color(0xFF8B5CF6),
+                              foregroundColor: Colors.white,
+                              shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(10)),
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                            ),
+                            child: Text(m.ctaLabel!,
+                                style: const TextStyle(
+                                    fontWeight: FontWeight.w600)),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+```
+
+### 5.6 Showing the Overlay from the Foreground Handler
+
+Use an `OverlayEntry` in your root navigator so the message appears above any screen:
+
+```dart
+// lib/services/notification_handler.dart  (extend existing class)
+
+static OverlayState? _overlay;
+static OverlayEntry? _inAppEntry;
+
+/// Call once from the root widget's initState
+static void setOverlay(OverlayState overlay) => _overlay = overlay;
+
+static void _showLocal(RemoteMessage message) {
+  final data = message.data;
+
+  if (data['type'] == 'inapp') {
+    _showInApp(data);
+    return; // don't show a system tray notification for inapp messages
+  }
+
+  final n = message.notification;
+  if (n == null) return;
+  // ... existing local notification display code ...
+}
+
+static void _showInApp(Map<String, dynamic> data) {
+  if (_overlay == null) return;
+
+  final msg = InAppMessage.fromData(data);
+
+  _inAppEntry = OverlayEntry(
+    builder: (_) => InAppOverlay(
+      message: msg,
+      onDismiss: _dismissInApp,
+    ),
+  );
+
+  _overlay!.insert(_inAppEntry!);
+
+  // Auto-dismiss banners after 6 seconds if dismissible
+  if (msg.style == 'banner' && msg.dismissible) {
+    Future.delayed(const Duration(seconds: 6), _dismissInApp);
+  }
+}
+
+static void _dismissInApp() {
+  _inAppEntry?.remove();
+  _inAppEntry = null;
+}
+```
+
+```dart
+// In your root widget (e.g. HomeScreen or MaterialApp wrapper):
+@override
+void initState() {
+  super.initState();
+  WidgetsBinding.instance.addPostFrameCallback((_) {
+    NotificationHandler.setOverlay(Overlay.of(context));
+  });
+}
+```
+
+### 5.7 go_router Routes (Posts + Wallpapers)
+
+```dart
+// lib/router/app_router.dart
+final GoRouter appRouter = GoRouter(
+  initialLocation: '/',
+  routes: [
+    GoRoute(path: '/',           builder: (_, __) => const HomeScreen()),
+    GoRoute(path: '/news',       builder: (_, __) => const NewsListScreen()),
+    GoRoute(path: '/wallpapers', builder: (_, __) => const WallpaperBrowseScreen()),
+
+    GoRoute(
+      path: '/news/:slug',
+      builder: (_, state) =>
+          NewsDetailScreen(slug: state.pathParameters['slug']!),
+    ),
+    GoRoute(
+      path: '/wallpaper/:id',
+      builder: (_, state) =>
+          WallpaperDetailScreen(id: state.pathParameters['id']!),
+    ),
+  ],
+);
+```
+
 ---
 
-## 10. Complete Notification Flow Diagram
+## 6. Search Endpoints
+
+### 6.1 Wallpaper Search
 
 ```
-[Admin uploads wallpaper]
-        ↓
-[Server: /api/admin/wallpapers POST]
-        ↓
-[sendWallpaperNotification()]
-        ↓
-[FCM: topic/new_wallpapers]
-        ↓
-[Flutter device receives RemoteMessage]
-  data: {
-    type: "wallpaper",
-    id: "uuid",
-    title: "Demon Slayer Epic",
-    image: "https://...",
-    deepLink: "mugenanime://wallpaper/uuid"
-  }
-        ↓
-[User taps notification]
-        ↓
-[NotificationHandler._navigateFromMessage()]
-        ↓
-[router.push('/wallpaper/uuid')]
-        ↓
-[WallpaperDetailScreen — fetch GET /api/wallpapers/uuid]
+GET /api/wallpapers/search?q={query}
+GET /api/wallpapers/search?q={query}&limit=12
+GET /api/wallpapers/search?q={query}&type=IMAGE
+GET /api/wallpapers/search?q={query}&type=VIDEO
 ```
 
-```
-[RSS feed runs — new article]
-        ↓
-[rss-processor: post created + autoPublish: true]
-        ↓
-[sendPostNotification()]
-        ↓
-[FCM: topic/new_posts]
-        ↓
-[Flutter device receives RemoteMessage]
-  data: {
-    type: "post",
-    id: "uuid",
-    slug: "attack-on-titan-review",
-    title: "Attack on Titan Review",
-    image: "https://...",
-    deepLink: "mugenanime://post/attack-on-titan-review"
+- `q` — required; returns `[]` when empty
+- `limit` — default `12`, max `30`
+- `type` — optional filter: `IMAGE` or `VIDEO`
+- Searches: **title**, **tag names**, **category names**
+
+**Response:** `List<WallpaperSearchResult>`
+```json
+[
+  {
+    "id": "uuid",
+    "title": "Demon Slayer Epic",
+    "imageUrl": "https://supabase.co/storage/...",
+    "type": "IMAGE",
+    "categories": [{ "id": "uuid", "name": "Anime", "slug": "anime" }],
+    "tags":       [{ "id": "uuid", "name": "demon slayer", "slug": "demon-slayer" }]
   }
-        ↓
-[User taps notification]
-        ↓
-[router.push('/news/attack-on-titan-review')]
-        ↓
-[NewsDetailScreen — fetch GET /api/posts/attack-on-titan-review]
+]
+```
+
+> **Note:** `imageUrl` is returned here (not `fileUrl`). Use it for thumbnails. To get the full
+> download URL, call `GET /api/wallpapers/{id}` which returns `fileUrl`.
+
+### 6.2 Post Search
+
+```
+GET /api/posts/search?q={query}
+GET /api/posts/search?q={query}&limit=10
+```
+
+- `q` — required; returns `[]` when empty
+- `limit` — default `10`, max `30`
+- Searches: **title**, **summary**, **tag names**, **category names** (published posts only)
+
+**Response:** `List<PostSearchResult>`
+```json
+[
+  {
+    "id": "uuid",
+    "title": "Attack on Titan Final Season Review",
+    "slug": "attack-on-titan-final-season-review",
+    "summary": "Short summary...",
+    "featuredImage": "https://...",
+    "createdAt": "2025-05-01T10:00:00Z",
+    "categories": [{ "id": "uuid", "name": "Reviews", "slug": "reviews" }],
+    "tags":       [{ "id": "uuid", "name": "attack on titan", "slug": "attack-on-titan" }]
+  }
+]
+```
+
+### 6.3 Dart Models
+
+```dart
+// lib/models/search_result.dart
+
+class WallpaperSearchResult {
+  final String id, title, imageUrl;
+  final WallpaperType type;
+  final List<WallpaperCategory> categories;
+  final List<WallpaperTag> tags;
+
+  bool get isVideo => type == WallpaperType.VIDEO;
+
+  WallpaperSearchResult.fromJson(Map<String, dynamic> j)
+    : id         = j['id'],
+      title      = j['title'],
+      imageUrl   = j['imageUrl'] ?? j['image_url'] ?? '',
+      type       = (j['type'] ?? 'IMAGE') == 'VIDEO'
+                     ? WallpaperType.VIDEO
+                     : WallpaperType.IMAGE,
+      categories = (j['categories'] as List? ?? [])
+                     .map((c) => WallpaperCategory.fromJson(c)).toList(),
+      tags       = (j['tags'] as List? ?? [])
+                     .map((t) => WallpaperTag.fromJson(t)).toList();
+}
+
+class PostSearchResult {
+  final String id, title, slug, summary;
+  final String? featuredImage;
+  final DateTime createdAt;
+  final List<Category> categories;
+  final List<Tag> tags;
+
+  PostSearchResult.fromJson(Map<String, dynamic> j)
+    : id            = j['id'],
+      title         = j['title'],
+      slug          = j['slug'],
+      summary       = j['summary'] ?? '',
+      featuredImage = j['featuredImage'] ?? j['featured_image'],
+      createdAt     = DateTime.parse(j['createdAt'] ?? j['created_at']),
+      categories    = (j['categories'] as List? ?? [])
+                        .map((c) => Category.fromJson(c)).toList(),
+      tags          = (j['tags'] as List? ?? [])
+                        .map((t) => Tag.fromJson(t)).toList();
+}
+
+class Category {
+  final String id, name, slug;
+  Category.fromJson(Map<String, dynamic> j)
+    : id = j['id'], name = j['name'], slug = j['slug'];
+}
+
+class Tag {
+  final String id, name, slug;
+  Tag.fromJson(Map<String, dynamic> j)
+    : id = j['id'], name = j['name'], slug = j['slug'];
+}
+```
+
+### 6.4 ApiService Methods
+
+Add to `ApiService` in `lib/services/api_service.dart`:
+
+```dart
+// ── Search ─────────────────────────────────────────────────────────────────
+
+static Future<List<WallpaperSearchResult>> searchWallpapers(
+  String query, {
+  int limit = 12,
+  String? type,
+}) async {
+  if (query.trim().isEmpty) return [];
+  final res = await _dio.get('/api/wallpapers/search', queryParameters: {
+    'q':     query.trim(),
+    'limit': limit,
+    if (type != null) 'type': type,
+  });
+  final list = res.data as List? ?? [];
+  return list.map((e) => WallpaperSearchResult.fromJson(e)).toList();
+}
+
+static Future<List<PostSearchResult>> searchPosts(
+  String query, {
+  int limit = 10,
+}) async {
+  if (query.trim().isEmpty) return [];
+  final res = await _dio.get('/api/posts/search', queryParameters: {
+    'q':     query.trim(),
+    'limit': limit,
+  });
+  final list = res.data as List? ?? [];
+  return list.map((e) => PostSearchResult.fromJson(e)).toList();
+}
+```
+
+### 6.5 SearchScreen — Full Implementation
+
+A unified search screen that queries both wallpapers and posts, debounced at 400 ms.
+
+```dart
+// lib/screens/search_screen.dart
+import 'dart:async';
+import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
+
+enum SearchTab { all, wallpapers, posts }
+
+class SearchScreen extends StatefulWidget {
+  const SearchScreen({super.key});
+
+  @override
+  State<SearchScreen> createState() => _SearchScreenState();
+}
+
+class _SearchScreenState extends State<SearchScreen>
+    with SingleTickerProviderStateMixin {
+  late final TabController _tabs;
+  final _controller = TextEditingController();
+  Timer? _debounce;
+
+  List<WallpaperSearchResult> _wallpapers = [];
+  List<PostSearchResult> _posts = [];
+  bool _loading = false;
+  String _lastQuery = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _tabs = TabController(length: 3, vsync: this);
+    _controller.addListener(_onQueryChanged);
+  }
+
+  @override
+  void dispose() {
+    _debounce?.cancel();
+    _controller.dispose();
+    _tabs.dispose();
+    super.dispose();
+  }
+
+  void _onQueryChanged() {
+    _debounce?.cancel();
+    _debounce = Timer(const Duration(milliseconds: 400), _search);
+  }
+
+  Future<void> _search() async {
+    final q = _controller.text.trim();
+    if (q == _lastQuery) return;
+    _lastQuery = q;
+
+    if (q.isEmpty) {
+      setState(() { _wallpapers = []; _posts = []; });
+      return;
+    }
+
+    setState(() => _loading = true);
+
+    try {
+      final results = await Future.wait([
+        ApiService.searchWallpapers(q),
+        ApiService.searchPosts(q),
+      ]);
+      if (!mounted) return;
+      setState(() {
+        _wallpapers = results[0] as List<WallpaperSearchResult>;
+        _posts      = results[1] as List<PostSearchResult>;
+        _loading    = false;
+      });
+    } catch (_) {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFF0B0416),
+      appBar: AppBar(
+        backgroundColor: const Color(0xFF0B0416),
+        title: TextField(
+          controller: _controller,
+          autofocus: true,
+          style: const TextStyle(color: Colors.white),
+          cursorColor: const Color(0xFF8B5CF6),
+          decoration: InputDecoration(
+            hintText: 'Search wallpapers, news…',
+            hintStyle: const TextStyle(color: Colors.white38),
+            border: InputBorder.none,
+            suffixIcon: _controller.text.isNotEmpty
+                ? IconButton(
+                    icon: const Icon(Icons.clear, color: Colors.white38),
+                    onPressed: () {
+                      _controller.clear();
+                      setState(() { _wallpapers = []; _posts = []; _lastQuery = ''; });
+                    },
+                  )
+                : null,
+          ),
+        ),
+        bottom: TabBar(
+          controller: _tabs,
+          labelColor: const Color(0xFF8B5CF6),
+          unselectedLabelColor: Colors.white38,
+          indicatorColor: const Color(0xFF8B5CF6),
+          tabs: [
+            Tab(text: 'All (${_wallpapers.length + _posts.length})'),
+            Tab(text: 'Wallpapers (${_wallpapers.length})'),
+            Tab(text: 'Posts (${_posts.length})'),
+          ],
+        ),
+      ),
+      body: _loading
+          ? const Center(child: CircularProgressIndicator(color: Color(0xFF8B5CF6)))
+          : TabBarView(
+              controller: _tabs,
+              children: [
+                _AllResultsTab(wallpapers: _wallpapers, posts: _posts),
+                _WallpapersTab(wallpapers: _wallpapers),
+                _PostsTab(posts: _posts),
+              ],
+            ),
+    );
+  }
+}
+
+// ── Tabs ──────────────────────────────────────────────────────────────────
+
+class _AllResultsTab extends StatelessWidget {
+  final List<WallpaperSearchResult> wallpapers;
+  final List<PostSearchResult> posts;
+  const _AllResultsTab({required this.wallpapers, required this.posts});
+
+  @override
+  Widget build(BuildContext context) {
+    if (wallpapers.isEmpty && posts.isEmpty) {
+      return const _EmptyState();
+    }
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        if (wallpapers.isNotEmpty) ...[
+          const _SectionHeader(title: 'Wallpapers'),
+          _WallpaperGrid(wallpapers: wallpapers.take(6).toList()),
+          const SizedBox(height: 16),
+        ],
+        if (posts.isNotEmpty) ...[
+          const _SectionHeader(title: 'News'),
+          ...posts.take(5).map((p) => _PostTile(post: p)),
+        ],
+      ],
+    );
+  }
+}
+
+class _WallpapersTab extends StatelessWidget {
+  final List<WallpaperSearchResult> wallpapers;
+  const _WallpapersTab({required this.wallpapers});
+
+  @override
+  Widget build(BuildContext context) {
+    if (wallpapers.isEmpty) return const _EmptyState();
+    return GridView.builder(
+      padding: const EdgeInsets.all(12),
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 3,
+        childAspectRatio: 9 / 16,
+        crossAxisSpacing: 8,
+        mainAxisSpacing: 8,
+      ),
+      itemCount: wallpapers.length,
+      itemBuilder: (context, i) => _WallpaperCard(wallpaper: wallpapers[i]),
+    );
+  }
+}
+
+class _PostsTab extends StatelessWidget {
+  final List<PostSearchResult> posts;
+  const _PostsTab({required this.posts});
+
+  @override
+  Widget build(BuildContext context) {
+    if (posts.isEmpty) return const _EmptyState();
+    return ListView.builder(
+      padding: const EdgeInsets.all(16),
+      itemCount: posts.length,
+      itemBuilder: (context, i) => _PostTile(post: posts[i]),
+    );
+  }
+}
+
+// ── Item Widgets ──────────────────────────────────────────────────────────
+
+class _WallpaperGrid extends StatelessWidget {
+  final List<WallpaperSearchResult> wallpapers;
+  const _WallpaperGrid({required this.wallpapers});
+
+  @override
+  Widget build(BuildContext context) {
+    return GridView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 3,
+        childAspectRatio: 9 / 16,
+        crossAxisSpacing: 8,
+        mainAxisSpacing: 8,
+      ),
+      itemCount: wallpapers.length,
+      itemBuilder: (context, i) => _WallpaperCard(wallpaper: wallpapers[i]),
+    );
+  }
+}
+
+class _WallpaperCard extends StatelessWidget {
+  final WallpaperSearchResult wallpaper;
+  const _WallpaperCard({required this.wallpaper});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: () => context.push('/wallpaper/${wallpaper.id}'),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(8),
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            Image.network(
+              wallpaper.imageUrl,
+              fit: BoxFit.cover,
+              errorBuilder: (_, __, ___) =>
+                  Container(color: const Color(0xFF1A0D2E)),
+            ),
+            if (wallpaper.isVideo)
+              const Positioned(
+                bottom: 6,
+                right: 6,
+                child: Icon(Icons.play_circle_filled,
+                    color: Colors.white70, size: 20),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _PostTile extends StatelessWidget {
+  final PostSearchResult post;
+  const _PostTile({required this.post});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: () => context.push('/news/${post.slug}'),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: const Color(0xFF0F0A1E),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: const Color(0x228B5CF6)),
+        ),
+        child: Row(
+          children: [
+            if (post.featuredImage != null)
+              ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: Image.network(
+                  post.featuredImage!,
+                  width: 72,
+                  height: 72,
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, __, ___) =>
+                      Container(width: 72, height: 72, color: const Color(0xFF1A0D2E)),
+                ),
+              ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    post.title,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    post.summary,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(color: Colors.white54, fontSize: 12),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ── Shared ────────────────────────────────────────────────────────────────
+
+class _SectionHeader extends StatelessWidget {
+  final String title;
+  const _SectionHeader({required this.title});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Text(title,
+          style: const TextStyle(
+              color: Color(0xFF8B5CF6),
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 0.8)),
+    );
+  }
+}
+
+class _EmptyState extends StatelessWidget {
+  const _EmptyState();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Center(
+      child: Text('No results found',
+          style: TextStyle(color: Colors.white38, fontSize: 15)),
+    );
+  }
+}
+```
+
+### 6.6 Router Integration
+
+Add the search route to `app_router.dart`:
+
+```dart
+GoRoute(
+  path: '/search',
+  builder: (_, __) => const SearchScreen(),
+),
+```
+
+Open search from a search icon anywhere:
+```dart
+IconButton(
+  icon: const Icon(Icons.search),
+  onPressed: () => context.push('/search'),
+)
+```
+
+### 6.7 Search Behavior Summary
+
+| Behavior | Detail |
+|---|---|
+| Debounce | 400 ms after last keystroke |
+| Empty query | Returns `[]` immediately, no network call |
+| Parallel fetch | Wallpapers + posts fetched simultaneously via `Future.wait` |
+| Tab counts | Update live after each search |
+| Navigation | Wallpaper → `/wallpaper/{id}`, Post → `/news/{slug}` |
+| Thumbnail field | Search uses `imageUrl`; detail page uses `fileUrl` from `/api/wallpapers/{id}` |
+
+---
+
+## 7. Notification + In-App Message Flow
+
+```
+── New Post ──────────────────────────────────────────────────
+RSS feed runs → post created + autoPublish: true
+  → sendPostNotification()
+  → FCM topic: new_posts
+  → RemoteMessage.data = {
+      type: "post", id: "uuid",
+      slug: "attack-on-titan-review",
+      title: "...", image: "...",
+      deepLink: "mugenanime://post/attack-on-titan-review"
+    }
+  → User taps tray notification
+  → router.push('/news/attack-on-titan-review')
+  → GET /api/posts/attack-on-titan-review
+
+── New Wallpaper ──────────────────────────────────────────────
+Admin uploads wallpaper
+  → sendWallpaperNotification()
+  → FCM topic: new_wallpapers
+  → RemoteMessage.data = {
+      type: "wallpaper", id: "uuid",
+      title: "...", image: "...",
+      deepLink: "mugenanime://wallpaper/uuid"
+    }
+  → User taps tray notification
+  → router.push('/wallpaper/uuid')
+  → GET /api/wallpapers/uuid
+
+── In-App Message ────────────────────────────────────────────
+Admin writes message on website → POST /api/admin/inapp-messages
+  → FCM data-only message to topic: inapp_com_mugenanime_app
+  → RemoteMessage.data = {
+      type: "inapp", style: "banner",
+      title: "...", body: "...",
+      ctaLabel: "...", ctaAction: "url",
+      ctaTarget: "https://mugenanime.com/..."
+    }
+  → App is foregrounded → _showLocal intercepts type == "inapp"
+  → InAppOverlay inserted into root Overlay
+  → User taps CTA → launchUrl / router.push
+  → Banner auto-dismisses after 6 s (or user closes it)
 ```
