@@ -777,7 +777,7 @@ GET /api/wallpapers/search?q={query}&type=VIDEO
   {
     "id": "uuid",
     "title": "Demon Slayer Epic",
-    "imageUrl": "https://supabase.co/storage/...",
+    "fileUrl": "https://supabase.co/storage/...",
     "type": "IMAGE",
     "categories": [{ "id": "uuid", "name": "Anime", "slug": "anime" }],
     "tags":       [{ "id": "uuid", "name": "demon slayer", "slug": "demon-slayer" }]
@@ -785,8 +785,7 @@ GET /api/wallpapers/search?q={query}&type=VIDEO
 ]
 ```
 
-> **Note:** `imageUrl` is returned here (not `fileUrl`). Use it for thumbnails. To get the full
-> download URL, call `GET /api/wallpapers/{id}` which returns `fileUrl`.
+> **Note:** `fileUrl` is the direct storage URL — use it for both thumbnails and downloads.
 
 ### 6.2 Post Search
 
@@ -821,7 +820,7 @@ GET /api/posts/search?q={query}&limit=10
 // lib/models/search_result.dart
 
 class WallpaperSearchResult {
-  final String id, title, imageUrl;
+  final String id, title, fileUrl;
   final WallpaperType type;
   final List<WallpaperCategory> categories;
   final List<WallpaperTag> tags;
@@ -831,7 +830,7 @@ class WallpaperSearchResult {
   WallpaperSearchResult.fromJson(Map<String, dynamic> j)
     : id         = j['id'],
       title      = j['title'],
-      imageUrl   = j['imageUrl'] ?? j['image_url'] ?? '',
+      fileUrl    = j['fileUrl'] ?? j['file_url'] ?? '',
       type       = (j['type'] ?? 'IMAGE') == 'VIDEO'
                      ? WallpaperType.VIDEO
                      : WallpaperType.IMAGE,
@@ -1142,7 +1141,7 @@ class _WallpaperCard extends StatelessWidget {
           fit: StackFit.expand,
           children: [
             Image.network(
-              wallpaper.imageUrl,
+              wallpaper.fileUrl,
               fit: BoxFit.cover,
               errorBuilder: (_, __, ___) =>
                   Container(color: const Color(0xFF1A0D2E)),
