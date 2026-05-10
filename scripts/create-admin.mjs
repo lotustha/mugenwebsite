@@ -9,6 +9,7 @@
 
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { randomUUID } from "node:crypto";
 
 function loadEnvFile(file) {
   try {
@@ -66,14 +67,17 @@ const client = new pg.Client({ connectionString: dbUrl });
 await client.connect();
 
 try {
+  // User.id has a Prisma-level @default(uuid()) but no DB-level DEFAULT,
+  // so raw inserts must supply the id explicitly.
+  const id = randomUUID();
   const sql = `
-    INSERT INTO public.users (email, password, role, created_at)
-    VALUES ($1, $2, 'ADMIN', NOW())
+    INSERT INTO public.users (id, email, password, role, created_at)
+    VALUES ($1, $2, $3, 'ADMIN', NOW())
     ON CONFLICT (email)
     DO UPDATE SET password = EXCLUDED.password, role = 'ADMIN'
     RETURNING id, email, role
   `;
-  const { rows } = await client.query(sql, [email, hash]);
+  const { rows } = await client.query(sql, [id, email, hash]);
   const row = rows[0];
   console.log(`Admin ready: ${row.email} (id ${row.id})`);
 } catch (e) {
