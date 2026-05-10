@@ -87,7 +87,7 @@ function normalisePinRecord(raw: unknown): PinSearchResult | null {
 
 /** Layer 1: undocumented JSON API. Fast but Pinterest 403s without session. */
 async function searchViaApi(query: string, limit: number): Promise<PinSearchResult[]> {
-  const data = {
+  const data: { options: Record<string, unknown> } = {
     options: { query, scope: "pins", page_size: Math.min(Math.max(limit, 1), 50) },
   };
   const sourceUrl = `/search/pins/?q=${encodeURIComponent(query)}`;
@@ -164,8 +164,12 @@ async function searchViaHtml(query: string, limit: number): Promise<PinSearchRes
   return out.slice(0, limit);
 }
 
-/** Layer 3: real browser. Slowest, most reliable. Requires Playwright + Chromium. */
-async function searchViaHeadless(query: string, limit: number): Promise<PinSearchResult[]> {
+/**
+ * Layer 3: real browser. Slowest, most reliable. Requires Playwright + Chromium.
+ * `scrollDepth` controls how many times we scroll — each scroll loads ~15-20
+ * more pins. Used by "Load more" to fetch deeper without changing the API surface.
+ */
+async function searchViaHeadless(query: string, limit: number, scrollDepth = 3): Promise<PinSearchResult[]> {
   let chromium: typeof import("playwright").chromium;
   try {
     ({ chromium } = await import("playwright"));
@@ -192,8 +196,9 @@ async function searchViaHeadless(query: string, limit: number): Promise<PinSearc
     // Pinterest renders pin tiles with data-test-id="pin"
     await page.waitForSelector('[data-test-id="pin"], [data-test-id="pinrep-image"], div[data-test-pin-id]', { timeout: 12_000 }).catch(() => {});
 
-    // Scroll a couple of times to load more results
-    for (let i = 0; i < 3 && i * 8 < limit; i++) {
+    // Scroll progressively to load more results. Cap at 20 to bound runtime.
+    const scrolls = Math.min(Math.max(scrollDepth, 1), 20);
+    for (let i = 0; i < scrolls; i++) {
       await page.evaluate(() => window.scrollBy(0, window.innerHeight * 1.5));
       await page.waitForTimeout(800);
     }
@@ -226,7 +231,7 @@ async function searchViaHeadless(query: string, limit: number): Promise<PinSearc
       return out;
     });
 
-    return harvested.slice(0, limit).map((h) => ({
+    return harvested.map((h) => ({
       ...h,
       pinUrl: `https://www.pinterest.com/pin/${h.pinId}/`,
     }));
@@ -235,30 +240,54 @@ async function searchViaHeadless(query: string, limit: number): Promise<PinSearc
   }
 }
 
+export interface SearchOpts {
+  /** Max results to return (after dedup). Default 25. */
+  limit?: number;
+  /** PinIds already shown — backend filters these out so "Load more" doesn't repeat. */
+  excludeIds?: string[];
+  /** For the headless path: how many times to scroll. Higher = more pins but slower. */
+  scrollDepth?: number;
+}
+
+export interface SearchResponse {
+  results: PinSearchResult[];
+  /** True if we hit the limit, suggesting more pages may exist. */
+  hasMore: boolean;
+}
+
 /**
  * Three-layer Pinterest search:
  *   1. Undocumented JSON API   (fast; often 403 without session cookies)
  *   2. HTML page + __PWS_DATA__ (server-rendered initial state)
  *   3. Headless Chromium       (slow, needs Playwright)
  *
- * Returns the first layer that yields a non-empty result. If all three
- * fail, the last error is rethrown so callers can show something useful.
+ * Returns the first layer that yields any new results (after excludeIds
+ * dedup). If all three fail, the last error is rethrown.
  */
-export async function searchPins(query: string, limit = 25): Promise<PinSearchResult[]> {
+export async function searchPins(query: string, opts: SearchOpts = {}): Promise<SearchResponse> {
   const trimmed = query.trim();
-  if (!trimmed) return [];
+  if (!trimmed) return { results: [], hasMore: false };
+
+  const limit = opts.limit ?? 25;
+  const excludeIds = new Set(opts.excludeIds ?? []);
+  const scrollDepth = opts.scrollDepth ?? 3;
 
   const errors: string[] = [];
 
   for (const [name, fn] of [
-    ["api", () => searchViaApi(trimmed, limit)],
-    ["html", () => searchViaHtml(trimmed, limit)],
-    ["headless", () => searchViaHeadless(trimmed, limit)],
+    // For paginated calls (excludeIds present), skip layers that can't dig deeper.
+    ["api", () => searchViaApi(trimmed, limit + excludeIds.size)],
+    ["html", () => searchViaHtml(trimmed, limit + excludeIds.size)],
+    ["headless", () => searchViaHeadless(trimmed, limit + excludeIds.size, scrollDepth)],
   ] as const) {
     try {
-      const results = await fn();
-      if (results.length > 0) return results;
-      errors.push(`${name}: 0 results`);
+      const all = await fn();
+      const filtered = all.filter((r) => !excludeIds.has(r.pinId));
+      if (filtered.length > 0) {
+        const sliced = filtered.slice(0, limit);
+        return { results: sliced, hasMore: filtered.length > sliced.length || all.length >= limit };
+      }
+      errors.push(`${name}: 0 new results`);
     } catch (e) {
       errors.push(`${name}: ${e instanceof Error ? e.message : String(e)}`);
     }

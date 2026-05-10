@@ -425,8 +425,11 @@ function PinterestImporter({
   // ── Search-mode state ─────────────────────────────────────────────────────
   const [query, setQuery] = useState("");
   const [searching, setSearching] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
   const [searchResults, setSearchResults] = useState<PinSearchResult[]>([]);
+  const [hasMore, setHasMore] = useState(false);
+  const [scrollDepth, setScrollDepth] = useState(3); // headless scroll count, bumped on each Load More
   const [selectedPins, setSelectedPins] = useState<Set<string>>(new Set());
   const [importStatus, setImportStatus] = useState<Map<string, "processing" | "ok" | "error">>(new Map());
   const [importErrors, setImportErrors] = useState<Map<string, string>>(new Map());
@@ -446,24 +449,59 @@ function PinterestImporter({
     setSearching(true);
     setSearchError(null);
     setSearchResults([]);
+    setHasMore(false);
+    setScrollDepth(3);
     setSelectedPins(new Set());
     setImportStatus(new Map());
     setImportErrors(new Map());
     try {
       const res = await fetch("/api/admin/pinterest-search", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ query: query.trim(), limit: 30 }),
+        body: JSON.stringify({ query: query.trim(), limit: 30, scrollDepth: 3 }),
       });
       const data = await res.json();
       if (!res.ok) {
         setSearchError(data.error ?? "Search failed");
       } else {
         setSearchResults(data.results ?? []);
+        setHasMore(!!data.hasMore);
       }
     } catch {
       setSearchError("Network error");
     }
     setSearching(false);
+  };
+
+  const handleLoadMore = async () => {
+    if (loadingMore || searching) return;
+    setLoadingMore(true);
+    setSearchError(null);
+    const nextDepth = scrollDepth + 2;
+    try {
+      const res = await fetch("/api/admin/pinterest-search", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          query: query.trim(),
+          limit: 30,
+          excludeIds: searchResults.map((r) => r.pinId),
+          scrollDepth: nextDepth,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setSearchError(data.error ?? "Load more failed");
+      } else {
+        const newOnes: PinSearchResult[] = (data.results ?? []).filter(
+          (r: PinSearchResult) => !searchResults.some((p) => p.pinId === r.pinId)
+        );
+        setSearchResults((prev) => [...prev, ...newOnes]);
+        setHasMore(!!data.hasMore && newOnes.length > 0);
+        setScrollDepth(nextDepth);
+      }
+    } catch {
+      setSearchError("Network error");
+    }
+    setLoadingMore(false);
   };
 
   const togglePin = (pinId: string) => {
@@ -693,6 +731,28 @@ function PinterestImporter({
                       </li>
                     )}
                   </ul>
+                </div>
+              )}
+
+              {/* Load more */}
+              {hasMore && (
+                <div className="flex justify-center">
+                  <GhostBtn onClick={handleLoadMore} disabled={loadingMore || importing}>
+                    {loadingMore ? (
+                      <>
+                        <div className="w-3 h-3 rounded-full border-2 animate-spin"
+                          style={{ borderColor: "rgba(186,158,255,0.25)", borderTopColor: "#ba9eff" }} />
+                        Loading more pins…
+                      </>
+                    ) : (
+                      <>
+                        <svg viewBox="0 0 16 16" fill="currentColor" className="w-3 h-3">
+                          <path d="M8 2a.75.75 0 0 1 .75.75v4.5h4.5a.75.75 0 0 1 0 1.5h-4.5v4.5a.75.75 0 0 1-1.5 0v-4.5h-4.5a.75.75 0 0 1 0-1.5h4.5v-4.5A.75.75 0 0 1 8 2Z" />
+                        </svg>
+                        Load more
+                      </>
+                    )}
+                  </GhostBtn>
                 </div>
               )}
 
