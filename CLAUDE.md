@@ -12,7 +12,7 @@ npm run build        # production build
 npm run lint         # ESLint
 
 # Prisma (run after any schema change)
-npx prisma db push --accept-data-loss   # sync schema to Supabase (drops removed columns)
+npx prisma db push --accept-data-loss   # sync schema to VPS Postgres (drops removed columns)
 npx prisma generate                      # regenerate client (auto-runs after db push)
 
 # If schema changed from single-FK category to many-to-many, --accept-data-loss is required
@@ -21,7 +21,9 @@ npx prisma generate                      # regenerate client (auto-runs after db
 ## Stack
 
 - **Next.js 16** (App Router) · **React 19** · **TypeScript** · **Tailwind CSS v4**
-- **Prisma 7** with `PrismaPg` adapter (connection pooling) + **Supabase** (auth + storage)
+- **Prisma 7** with `PrismaPg` adapter — talks to **self-hosted Postgres on the VPS** (`localhost:5432/mugenwebsite`)
+- **NextAuth (Auth.js) v5** with a Credentials provider (bcrypt-hashed passwords in `users.password`)
+- **Local-filesystem storage** for uploads (under `UPLOAD_DIR`, served at `/uploads/*`)
 - **Framer Motion** for animations · **Tiptap** for rich text editing
 
 ## Prisma 7 — Critical Differences from Prisma 5/6
@@ -31,17 +33,31 @@ npx prisma generate                      # regenerate client (auto-runs after db
 - `prisma.config.ts` uses `DIRECT_URL` for migrations; runtime uses `DATABASE_URL` (pooled) via `PrismaPg` adapter
 - `prisma db push` regenerates the client automatically
 
-## Supabase Client Pattern
+## Auth Pattern (NextAuth v5)
 
-Three distinct clients — use the right one:
+| File                       | When to use                                                              |
+| -------------------------- | ------------------------------------------------------------------------ |
+| `src/lib/auth.ts`          | Full NextAuth instance with Credentials provider — `auth()`, `signOut()` for server components / actions / API routes |
+| `src/lib/auth.config.ts`   | Edge-safe config (no providers) — used only by `src/proxy.ts` middleware |
+| `src/lib/auth-helpers.ts`  | `requireAdmin()` — drop-in for the old `supabase.auth.getUser()` pattern in admin API routes; returns `{id, email, role}` or `null` |
+| `next-auth/react`          | Client components: `signIn("credentials", {...})`, `signOut(...)`        |
 
-| File                           | When to use                                                             |
-| ------------------------------ | ----------------------------------------------------------------------- |
-| `src/utils/supabase/server.ts` | Server Components, Route Handlers, Server Actions — reads cookies       |
-| `src/utils/supabase/client.ts` | Client Components only                                                  |
-| `src/utils/supabase/admin.ts`  | Bypassing RLS, bucket management — requires `SUPABASE_SERVICE_ROLE_KEY` |
+Session is JWT-based; `session.user.id` is the **Prisma `User.id`** so it can be used directly as a foreign key (uploaderId, authorId).
 
-Auth guard lives in `src/app/admin/(dashboard)/layout.tsx` (server-side redirect), not middleware.
+Auth enforcement runs in two places: `src/proxy.ts` (Next 16 middleware) redirects unauthenticated `/admin/**` to `/admin/login`, and `src/app/admin/(dashboard)/layout.tsx` does a server-side `auth()` check as a belt-and-suspenders.
+
+**Bootstrap the first admin** with `npm run create-admin -- email@example.com 'password'` — runs `scripts/create-admin.mjs` which inserts/updates a hashed admin row directly via `pg`.
+
+## Storage Pattern (local FS)
+
+Files are written to `UPLOAD_DIR` (default `/www/wwwroot/mugenstream.fun/uploads`) and served by `src/app/uploads/[...path]/route.ts` at `/uploads/*`.
+
+| Helper                                  | Purpose                                                                  |
+| --------------------------------------- | ------------------------------------------------------------------------ |
+| `saveBuffer({buffer, folder, ext})`     | Write a buffer to `UPLOAD_DIR/folder/timestamp-rand.ext`; returns `{path, url}` where `url` is `/uploads/folder/...` |
+| `uploadDir()`                           | Returns the resolved `UPLOAD_DIR` for the streaming route                |
+
+For absolute URLs (e.g., the Flutter app), prepend `NEXT_PUBLIC_SITE_URL` to the returned `url`. In production, you can put nginx in front and serve `UPLOAD_DIR` directly to bypass the Next.js route.
 
 ## Route Groups
 
@@ -49,7 +65,7 @@ Auth guard lives in `src/app/admin/(dashboard)/layout.tsx` (server-side redirect
 src/app/
   (main)/          # Public pages — wrapped by Navbar + Footer
   admin/
-    (dashboard)/   # Auth-protected admin — server checks Supabase user, redirects to /admin/login
+    (dashboard)/   # Auth-protected admin — server calls auth() (NextAuth), redirects to /admin/login
   api/
     admin/         # Admin-only API routes (auth checked inline per route via createClient().getUser())
     wallpapers/    # Public wallpapers API
@@ -71,11 +87,10 @@ src/app/
 ## Environment Variables
 
 ```
-DATABASE_URL                        # Supabase pooled connection (pgbouncer=true)
-DIRECT_URL                          # Supabase direct connection (for prisma.config.ts migrations)
-NEXT_PUBLIC_SUPABASE_URL
-NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
-SUPABASE_SERVICE_ROLE_KEY           # Admin client only — never expose to browser
+DATABASE_URL                        # postgresql://mugenwebsite:mugenwebsite@localhost:5432/mugenwebsite
+DIRECT_URL                          # Same as DATABASE_URL on the VPS (used by prisma.config.ts)
+AUTH_SECRET                         # NextAuth JWT secret (openssl rand -base64 32)
+UPLOAD_DIR                          # /www/wwwroot/mugenstream.fun/uploads (where files are saved on the VPS)
 ANIME_API_BASE                      # External anime API
 MOVIE_API_BASE                      # External movie API
 NEXT_PUBLIC_APP_URL

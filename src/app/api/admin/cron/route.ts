@@ -1,12 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { createClient } from "@/utils/supabase/server";
-
-async function requireAuth() {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  return user;
-}
+import { requireAdmin } from "@/lib/auth-helpers";
 
 const KEYS = ["cron_enabled", "cron_last_tick", "cron_last_run"] as const;
 
@@ -27,7 +21,7 @@ export async function GET() {
 
 // PATCH /api/admin/cron — enable or disable scheduler
 export async function PATCH(req: Request) {
-  const user = await requireAuth();
+  const user = await requireAdmin();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { enabled } = await req.json();

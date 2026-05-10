@@ -6,7 +6,7 @@
  *   1. Fetch & parse RSS XML
  *   2. Deduplicate against rss_import_logs
  *   3. For each new item:
- *      a. Download images → upload to Supabase Storage
+ *      a. Download images → save to local UPLOAD_DIR via saveBuffer
  *      b. Call AI to humanize, summarise, generate SEO, tags, category
  *      c. Auto-create category if missing
  *      d. Create/upsert tags
@@ -15,7 +15,7 @@
  */
 
 import { prisma } from "@/lib/prisma";
-import { createClient } from "@/utils/supabase/server";
+import { saveBuffer } from "@/lib/storage";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 export interface RssItem {
@@ -113,11 +113,8 @@ export function parseRssXml(xml: string): RssItem[] {
   return items;
 }
 
-// ─── Image download → Supabase upload ────────────────────────────────────────
-export async function downloadAndStoreImage(
-  imageUrl: string,
-  supabase: Awaited<ReturnType<typeof createClient>>
-): Promise<string | null> {
+// ─── Image download → local storage ──────────────────────────────────────────
+export async function downloadAndStoreImage(imageUrl: string): Promise<string | null> {
   try {
     const res = await fetch(imageUrl, {
       headers: { "User-Agent": "MugenAnime-Bot/1.0" },
@@ -131,18 +128,13 @@ export async function downloadAndStoreImage(
     const ext = contentType.split("/")[1]?.split(";")[0] ?? "jpg";
     const arrayBuffer = await res.arrayBuffer();
     if (arrayBuffer.byteLength > 10 * 1024 * 1024) return null; // skip >10MB
-    const bytes = Buffer.from(arrayBuffer);
 
-    await supabase.storage.createBucket("media", { public: true }).catch(() => {});
-
-    const filename = `rss/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
-    const { error } = await supabase.storage
-      .from("media")
-      .upload(filename, bytes, { contentType, upsert: false });
-
-    if (error) return null;
-    const { data: { publicUrl } } = supabase.storage.from("media").getPublicUrl(filename);
-    return publicUrl;
+    const { url } = await saveBuffer({
+      buffer: Buffer.from(arrayBuffer),
+      folder: "rss",
+      ext,
+    });
+    return url;
   } catch {
     return null;
   }
@@ -320,8 +312,7 @@ async function processItem(
   item: RssItem,
   aiSettings: AiSettings,
   autoPublish: boolean,
-  authorId: string,
-  supabase: Awaited<ReturnType<typeof createClient>>
+  authorId: string
 ): Promise<{ status: "ok" | "error"; postId?: string; error?: string }> {
   // 0. Skip items with no usable content
   if (!item.title && !item.content && !item.description) {
@@ -380,13 +371,13 @@ async function processItem(
 
   // Level 1: image embedded in the RSS item XML
   if (item.imageUrl) {
-    featuredImage = await downloadAndStoreImage(item.imageUrl, supabase);
+    featuredImage = await downloadAndStoreImage(item.imageUrl);
   }
 
   // Level 2: scrape og:image / twitter:image from the article URL
   if (!featuredImage && item.link) {
     const scraped = await scrapeArticleOgImage(item.link);
-    if (scraped) featuredImage = await downloadAndStoreImage(scraped, supabase);
+    if (scraped) featuredImage = await downloadAndStoreImage(scraped);
   }
 
   // Level 3: first <img> found inside AI-rewritten content
@@ -396,7 +387,7 @@ async function processItem(
       u.startsWith("http") &&
       !/(pixel|1x1|beacon|avatar|logo|icon|sprite|blank|spacer|\.gif)/i.test(u)
     );
-    if (good) featuredImage = await downloadAndStoreImage(good, supabase);
+    if (good) featuredImage = await downloadAndStoreImage(good);
   }
 
   // 5. Ensure category exists (create if needed)
@@ -506,8 +497,6 @@ export interface ProcessResult {
 }
 
 export async function processFeedsWithAi(opts: ProcessFeedOptions): Promise<ProcessResult[]> {
-  const supabase = await createClient();
-
   // Resolve author — use the invoking user, or first ADMIN, or create a system user
   let author;
   
@@ -603,7 +592,7 @@ export async function processFeedsWithAi(opts: ProcessFeedOptions): Promise<Proc
       }
 
       const itemResult = await processItem(
-        feed.id, item, opts.aiSettings, feed.autoPublish, author.id, supabase
+        feed.id, item, opts.aiSettings, feed.autoPublish, author.id
       );
 
       // Log result

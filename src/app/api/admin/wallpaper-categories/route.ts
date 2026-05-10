@@ -1,11 +1,9 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { createClient } from "@/utils/supabase/server";
+import { requireAdmin } from "@/lib/auth-helpers";
 
 async function requireAuth() {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  return user ? user : null;
+  return await requireAdmin();
 }
 
 function slugify(s: string) {

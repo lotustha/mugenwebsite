@@ -9,14 +9,13 @@
  *   NEXT_PUBLIC_SITE_URL  (used to build the redirect URI)
  */
 import { NextResponse } from "next/server";
-import { createClient } from "@/utils/supabase/server";
+import { requireAdmin } from "@/lib/auth-helpers";
 import { cookies } from "next/headers";
 import { randomBytes } from "crypto";
 
 export async function GET() {
   // Must be authenticated admin
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await requireAdmin();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const clientId = process.env.GOOGLE_CLIENT_ID;

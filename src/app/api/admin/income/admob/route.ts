@@ -10,13 +10,7 @@
  */
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { createClient } from "@/utils/supabase/server";
-
-async function requireAuth() {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  return user;
-}
+import { requireAdmin } from "@/lib/auth-helpers";
 
 async function refreshAccessToken(clientId: string, clientSecret: string, refreshToken: string) {
   const res = await fetch("https://oauth2.googleapis.com/token", {
@@ -30,7 +24,7 @@ async function refreshAccessToken(clientId: string, clientSecret: string, refres
 }
 
 export async function GET(req: Request) {
-  if (!await requireAuth()) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!await requireAdmin()) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { searchParams } = new URL(req.url);
   const start = searchParams.get("start") ?? new Date(Date.now() - 29 * 86400000).toISOString().slice(0, 10);

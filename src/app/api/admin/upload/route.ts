@@ -1,13 +1,13 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@/utils/supabase/server";
+import { requireAdmin } from "@/lib/auth-helpers";
+import { saveBuffer } from "@/lib/storage";
 
-// POST /api/admin/upload  — upload image to Supabase Storage
+// POST /api/admin/upload  — upload image to UPLOAD_DIR (default /www/wwwroot/mugenstream.fun/uploads)
 // Body: FormData { file: File, folder?: string }
 // Returns: { url: string }
 export async function POST(request: Request) {
   try {
-    const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
+    const user = await requireAdmin();
     if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
     const formData = await request.formData();
@@ -23,19 +23,11 @@ export async function POST(request: Request) {
 
     const folder = (formData.get("folder") as string | null) ?? "misc";
     const ext = file.name.split(".").pop()?.toLowerCase() ?? "jpg";
-    const filename = `${folder}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
 
-    await supabase.storage.createBucket("media", { public: true }).catch(() => {});
+    const buffer = Buffer.from(await file.arrayBuffer());
+    const { url } = await saveBuffer({ buffer, folder, ext });
 
-    const { error: uploadError } = await supabase.storage
-      .from("media")
-      .upload(filename, file, { contentType: file.type, upsert: false });
-
-    if (uploadError)
-      return NextResponse.json({ error: uploadError.message }, { status: 500 });
-
-    const { data: { publicUrl } } = supabase.storage.from("media").getPublicUrl(filename);
-    return NextResponse.json({ url: publicUrl });
+    return NextResponse.json({ url });
   } catch (err: any) {
     return NextResponse.json({ error: err.message ?? "Upload failed" }, { status: 500 });
   }

@@ -1,10 +1,10 @@
 import Link from "next/link";
-import { createClient } from "@/utils/supabase/server";
+import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
 export default async function AdminDashboardPage() {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const session = await auth();
+  const user = session?.user ?? null;
 
   const [
     appCountResult,

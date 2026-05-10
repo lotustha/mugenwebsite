@@ -4,12 +4,11 @@
  */
 
 import { NextResponse } from "next/server";
-import { createClient } from "@/utils/supabase/server";
+import { requireAdmin } from "@/lib/auth-helpers";
 import { processFeedsWithAi } from "@/lib/rss-processor";
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await requireAdmin();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { id } = await params;
@@ -41,7 +40,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       force: true,
       invokingUser: {
         id: user.id,
-        email: user.email || "admin@mugenstream.fun",
+        email: user.email,
       },
     });
     return NextResponse.json({ ok: true, results });

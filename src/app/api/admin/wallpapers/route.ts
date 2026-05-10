@@ -1,15 +1,11 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { createClient } from "@/utils/supabase/server";
-import { ensureWallpapersBucket } from "@/utils/supabase/admin";
+import { requireAdmin } from "@/lib/auth-helpers";
+import { saveBuffer } from "@/lib/storage";
 
 async function getUploaderId() {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return null;
-  let dbUser = await prisma.user.findUnique({ where: { email: user.email! } });
-  if (!dbUser) dbUser = await prisma.user.create({ data: { id: user.id, email: user.email!, role: "ADMIN" } });
-  return dbUser.id;
+  const user = await requireAdmin();
+  return user?.id ?? null;
 }
 
 function slugify(s: string) {
@@ -76,17 +72,9 @@ export async function POST(request: Request) {
 
     if (!file || !title) return NextResponse.json({ error: "file and title required" }, { status: 400 });
 
-    const supabase = await createClient();
-    await ensureWallpapersBucket();
-
-    const ext = file.name.split(".").pop();
-    const fileName = `${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
-    const { data, error } = await supabase.storage
-      .from("wallpapers")
-      .upload(fileName, file, { contentType: file.type });
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-
-    const { data: { publicUrl } } = supabase.storage.from("wallpapers").getPublicUrl(data.path);
+    const ext = file.name.split(".").pop() ?? "bin";
+    const buffer = Buffer.from(await file.arrayBuffer());
+    const { url: publicUrl } = await saveBuffer({ buffer, folder: "wallpapers", ext });
     const type = file.type.startsWith("video/") ? "VIDEO" : "IMAGE";
 
     // Resolve categories

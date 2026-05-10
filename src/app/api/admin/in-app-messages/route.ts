@@ -1,12 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { createClient } from "@/utils/supabase/server";
-
-async function requireAuth() {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  return user;
-}
+import { requireAdmin } from "@/lib/auth-helpers";
 
 const INCLUDE = {
   _count: { select: { impressions: true, clicks: true } },
@@ -34,7 +28,7 @@ export async function GET() {
 
 // POST — create message
 export async function POST(req: Request) {
-  if (!await requireAuth()) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!await requireAdmin()) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   try {
     const body = await req.json();
     const msg = await prisma.inAppMessage.create({

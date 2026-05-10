@@ -5,15 +5,14 @@
  * and stores everything in SystemSetting.
  */
 import { NextResponse } from "next/server";
-import { createClient } from "@/utils/supabase/server";
+import { requireAdmin } from "@/lib/auth-helpers";
 import { cookies } from "next/headers";
 import { prisma } from "@/lib/prisma";
 
 const SITE = () => (process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000").replace(/\/$/, "");
 
 export async function GET(req: Request) {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await requireAdmin();
   if (!user) return NextResponse.redirect(`${SITE()}/admin/login`);
 
   const { searchParams } = new URL(req.url);
@@ -60,7 +59,7 @@ export async function GET(req: Request) {
 
   // ── Step 2: Fetch AdMob account info ─────────────────────────────────────────
   let accountId    = "";
-  let accountEmail = user.email ?? "";
+  let accountEmail = user.email;
 
   try {
     const acctRes = await fetch("https://admob.googleapis.com/v1/accounts", {

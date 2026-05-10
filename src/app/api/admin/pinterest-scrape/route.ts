@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { createClient } from "@/utils/supabase/server";
-import { ensureWallpapersBucket } from "@/utils/supabase/admin";
+import { requireAdmin } from "@/lib/auth-helpers";
+import { saveBuffer } from "@/lib/storage";
 
 const MAX_BYTES = 100 * 1024 * 1024; // 100 MB
 
@@ -162,11 +162,10 @@ async function scrapePinMeta(pinUrl: string): Promise<{
   return { videoUrl, imageUrl, title, category };
 }
 
-// ─── Download URL → Supabase Storage ─────────────────────────────────────────
-async function downloadToSupabase(
+// ─── Download URL → local storage ────────────────────────────────────────────
+async function downloadToStorage(
   mediaUrl: string,
-  isVideo: boolean,
-  supabase: Awaited<ReturnType<typeof createClient>>
+  isVideo: boolean
 ): Promise<{ url: string; actualType: "IMAGE" | "VIDEO" }> {
   const res = await fetch(mediaUrl, {
     headers: {
@@ -196,31 +195,16 @@ async function downloadToSupabase(
   if (buffer.byteLength > MAX_BYTES) throw new Error("File too large (max 100 MB)");
 
   const ext = actuallyVideo ? "mp4" : (contentType.split("/")[1]?.split(";")[0]?.replace("jpeg", "jpg") ?? "jpg");
-  const filename = `pinterest/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
-
-  await ensureWallpapersBucket();
-
-  const { error } = await supabase.storage
-    .from("wallpapers")
-    .upload(filename, Buffer.from(buffer), { contentType, upsert: false });
-
-  if (error) throw new Error(error.message);
-
-  const { data: { publicUrl } } = supabase.storage.from("wallpapers").getPublicUrl(filename);
-  return { url: publicUrl, actualType };
+  const { url } = await saveBuffer({ buffer: Buffer.from(buffer), folder: "pinterest", ext });
+  return { url, actualType };
 }
 
 // ─── Route handler ────────────────────────────────────────────────────────────
 export async function POST(request: Request) {
   try {
-    const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
+    const user = await requireAdmin();
     if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
-    let uploader = await prisma.user.findUnique({ where: { email: user.email! } });
-    if (!uploader) {
-      uploader = await prisma.user.create({ data: { id: user.id, email: user.email!, role: "ADMIN" } });
-    }
+    const uploader = { id: user.id };
 
     const body = await request.json();
     const urls: string[] = (Array.isArray(body.urls) ? body.urls : [body.url]).filter(Boolean);
@@ -255,7 +239,7 @@ export async function POST(request: Request) {
           }
         }
 
-        const { url: fileUrl, actualType } = await downloadToSupabase(mediaUrl, isVideo, supabase);
+        const { url: fileUrl, actualType } = await downloadToStorage(mediaUrl, isVideo);
 
         // Use forced category from UI if provided
         const categoryId = forceCategoryId;

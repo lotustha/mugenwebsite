@@ -1,16 +1,10 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { createClient } from "@/utils/supabase/server";
-
-async function requireAuth() {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  return user;
-}
+import { requireAdmin } from "@/lib/auth-helpers";
 
 // PUT — update message
 export async function PUT(req: Request, { params }: { params: Promise<{ id: string }> }) {
-  if (!await requireAuth()) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!await requireAdmin()) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const { id } = await params;
   try {
     const body = await req.json();
@@ -47,7 +41,7 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
 
 // DELETE — remove message and all tracking data
 export async function DELETE(_: Request, { params }: { params: Promise<{ id: string }> }) {
-  if (!await requireAuth()) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!await requireAdmin()) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const { id } = await params;
   await prisma.inAppMessage.delete({ where: { id } });
   return NextResponse.json({ ok: true });

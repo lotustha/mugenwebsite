@@ -1,12 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { createClient } from "@/utils/supabase/server";
-
-async function requireAuth() {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  return user;
-}
+import { requireAdmin } from "@/lib/auth-helpers";
 
 function toSlug(name: string) {
   return name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
@@ -28,7 +22,7 @@ export async function GET() {
 // POST /api/admin/categories  — create one
 export async function POST(request: Request) {
   try {
-    const user = await requireAuth();
+    const user = await requireAdmin();
     if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
     const { name } = await request.json();

@@ -10,12 +10,11 @@
  *   testToken: string (optional — send to single device instead of topic)
  */
 import { NextResponse } from "next/server";
-import { createClient } from "@/utils/supabase/server";
+import { requireAdmin } from "@/lib/auth-helpers";
 import { sendBroadcast, sendToToken } from "@/lib/push-notifications";
 
 export async function POST(req: Request) {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await requireAdmin();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { topic = "all", title, body, imageUrl, data, testToken } = await req.json();

@@ -1,17 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { createClient } from "@/utils/supabase/server";
-
-async function requireAuth() {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return null;
-  let dbUser = await prisma.user.findUnique({ where: { email: user.email! } });
-  if (!dbUser) {
-    dbUser = await prisma.user.create({ data: { id: user.id, email: user.email!, role: "ADMIN" } });
-  }
-  return dbUser.id;
-}
+import { requireAdmin } from "@/lib/auth-helpers";
 
 // GET /api/admin/posts  — list all posts with relations
 export async function GET() {
@@ -33,8 +22,9 @@ export async function GET() {
 // POST /api/admin/posts  — create post
 export async function POST(request: Request) {
   try {
-    const authorId = await requireAuth();
-    if (!authorId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const user = await requireAdmin();
+    if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const authorId = user.id;
 
     const body = await request.json();
     const {

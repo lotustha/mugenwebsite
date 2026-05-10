@@ -1,24 +1,22 @@
 import Link from "next/link";
-import { createClient } from "@/utils/supabase/server";
+import { auth, signOut } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import AdminNav from "@/components/AdminNav";
 import AdminBottomNav from "@/components/AdminBottomNav";
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const session = await auth();
+  const user = session?.user;
 
-  if (!user) redirect("/admin/login");
+  if (!user?.email) redirect("/admin/login");
 
   const handleSignOut = async () => {
     "use server";
-    const supabase = await createClient();
-    await supabase.auth.signOut();
-    redirect("/admin/login");
+    await signOut({ redirectTo: "/admin/login" });
   };
 
-  const initials  = user.email ? user.email.slice(0, 2).toUpperCase() : "AD";
-  const userEmail = user.email ?? "";
+  const initials  = user.email.slice(0, 2).toUpperCase();
+  const userEmail = user.email;
 
   return (
     <div className="min-h-screen flex bg-background">

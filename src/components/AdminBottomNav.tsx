@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
-import { createClient } from "@/utils/supabase/client";
+import { signOut as nextAuthSignOut } from "next-auth/react";
 
 // ─── Primary tabs (always visible) ────────────────────────────────────────────
 const PRIMARY = [
@@ -44,9 +44,7 @@ export default function AdminBottomNav({ userEmail }: { userEmail: string }) {
     exact ? pathname === href : pathname.startsWith(href);
 
   const signOut = async () => {
-    const supabase = createClient();
-    await supabase.auth.signOut();
-    window.location.href = "/admin/login";
+    await nextAuthSignOut({ redirectTo: "/admin/login" });
   };
 
   const anySecondaryActive = SECONDARY.some(s => pathname.startsWith(s.href));

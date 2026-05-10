@@ -3,7 +3,7 @@
 import { useState, FormEvent, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { createClient } from "@/utils/supabase/client";
+import { signIn } from "next-auth/react";
 import { motion, AnimatePresence } from "framer-motion";
 
 /* ─── Ambient orbs ─── */
@@ -58,10 +58,9 @@ function LoginForm() {
     e.preventDefault();
     setError("");
     setLoading(true);
-    const supabase = createClient();
-    const { error: authError } = await supabase.auth.signInWithPassword({ email, password });
-    if (authError) {
-      setError(authError.message);
+    const result = await signIn("credentials", { email, password, redirect: false });
+    if (!result || result.error) {
+      setError("Invalid email or password");
       setLoading(false);
       return;
     }
