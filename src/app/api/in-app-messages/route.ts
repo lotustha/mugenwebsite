@@ -7,6 +7,7 @@
  */
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { absolutizeMediaUrls } from "@/lib/url";
 
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
@@ -49,7 +50,7 @@ export async function GET(req: Request) {
       clickCount:      _count.clicks,
     }));
 
-    return NextResponse.json(result);
+    return NextResponse.json(absolutizeMediaUrls(result));
   } catch (e: any) {
     return NextResponse.json({ error: e?.message ?? "Failed" }, { status: 500 });
   }

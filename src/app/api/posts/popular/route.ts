@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { absolutizeMediaUrls } from "@/lib/url";
 
 export async function GET() {
   try {
@@ -9,7 +10,7 @@ export async function GET() {
       orderBy: { createdAt: "desc" },
       take: 5,
     });
-    return NextResponse.json(posts);
+    return NextResponse.json(absolutizeMediaUrls(posts));
   } catch {
     return NextResponse.json([], { status: 200 });
   }

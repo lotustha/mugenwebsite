@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { absolutizeMediaUrls } from "@/lib/url";
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -32,7 +33,7 @@ export async function GET(request: Request) {
       orderBy: { createdAt: "desc" },
       take: limit,
     });
-    return NextResponse.json(posts);
+    return NextResponse.json(absolutizeMediaUrls(posts));
   } catch {
     return NextResponse.json([]);
   }
