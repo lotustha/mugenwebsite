@@ -6,6 +6,7 @@ import {
   extractPinMedia,
   extractWithHeadless,
   downloadPinMedia,
+  downloadHlsToMp4,
   type PinMedia,
 } from "@/lib/pinterest";
 
@@ -44,12 +45,28 @@ async function extract(pinUrl: string): Promise<PinMedia> {
   } catch {
     media = null;
   }
-  if (media && (media.videoUrl || media.imageUrl)) return media;
+  if (media && (media.videoUrl || media.hlsUrl || media.imageUrl)) return media;
 
   const headless = await extractWithHeadless(pinUrl);
-  if (headless && (headless.videoUrl || headless.imageUrl)) return headless;
+  if (headless && (headless.videoUrl || headless.hlsUrl || headless.imageUrl)) return headless;
 
   throw new Error("No media found on this pin");
+}
+
+async function downloadFromMedia(media: PinMedia): Promise<{ url: string; actualType: "IMAGE" | "VIDEO" }> {
+  if (media.videoUrl && !media.videoUrl.includes(".m3u8")) {
+    return await downloadPinMedia(media.videoUrl, true);
+  }
+  if (media.hlsUrl) {
+    try {
+      const { url } = await downloadHlsToMp4(media.hlsUrl);
+      return { url, actualType: "VIDEO" };
+    } catch (e) {
+      if (!media.imageUrl) throw e instanceof Error ? e : new Error("HLS download failed");
+    }
+  }
+  if (media.imageUrl) return await downloadPinMedia(media.imageUrl, false);
+  throw new Error("No downloadable media URL");
 }
 
 export async function POST(request: Request) {
@@ -74,16 +91,7 @@ export async function POST(request: Request) {
       try {
         const pinUrl = await resolvePinUrl(rawUrl);
         const media = await extract(pinUrl);
-
-        let mediaUrl = media.videoUrl ?? media.imageUrl!;
-        let isVideo = !!media.videoUrl;
-
-        if (isVideo && mediaUrl.includes(".m3u8")) {
-          if (media.imageUrl) { mediaUrl = media.imageUrl; isVideo = false; }
-          else throw new Error("Only HLS stream found — no MP4 to download");
-        }
-
-        const { url: fileUrl, actualType } = await downloadPinMedia(mediaUrl, isVideo);
+        const { url: fileUrl, actualType } = await downloadFromMedia(media);
 
         const wallpaper = await prisma.wallpaper.create({
           data: {

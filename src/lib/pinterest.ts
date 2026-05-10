@@ -22,7 +22,10 @@ export interface PinSearchResult {
 }
 
 export interface PinMedia {
+  /** Direct MP4 URL — preferred. Caller can stream-download with fetch. */
   videoUrl: string | null;
+  /** HLS playlist URL — requires ffmpeg to remux into MP4. Set when no direct MP4 exists. */
+  hlsUrl: string | null;
   imageUrl: string | null;
   title: string;
   category: string;
@@ -342,6 +345,12 @@ export async function extractPinMedia(pinUrl: string): Promise<PinMedia> {
     if (pinId) videoUrl = await tryPinterestPinApi(pinId);
   }
 
+  // Pinterest "duplo-hls-video" pins serve only HLS — capture the m3u8 URL.
+  const hlsUrl =
+    unescaped.match(/https?:\/\/v\.pinimg\.com\/videos\/[^\s"'>]+\.m3u8[^"'\s>]*/)?.[0] ??
+    html.match(/https?:\/\/v\.pinimg\.com\/videos\/[^\s"'>]+\.m3u8[^"'\s>]*/)?.[0] ??
+    null;
+
   const imageUrl =
     html.match(/<meta[^>]+property="og:image"[^>]+content="([^"]+)"/i)?.[1] ??
     html.match(/<meta[^>]+content="([^"]+)"[^>]+property="og:image"/i)?.[1] ??
@@ -383,25 +392,60 @@ export async function extractPinMedia(pinUrl: string): Promise<PinMedia> {
     }
   }
 
-  return { videoUrl, imageUrl, title, category };
+  return { videoUrl, hlsUrl, imageUrl, title, category };
 }
 
 // ─── Headless fallback (Playwright) ──────────────────────────────────────────
 
 /**
+ * Pull the highest-quality MP4 out of a video_list object as written by
+ * Pinterest's API. Returns null for HLS-only streams.
+ */
+function pickMp4FromVideoList(videoList: unknown): string | null {
+  if (!videoList || typeof videoList !== "object") return null;
+  const list = videoList as Record<string, { url?: string }>;
+  for (const quality of ["V_1080P", "V_720P", "V_480P", "V_360P"]) {
+    const entry = list[quality];
+    if (entry?.url && /\.mp4(\?|$)/i.test(entry.url)) return entry.url;
+  }
+  return null;
+}
+
+/**
+ * Walk an arbitrary JSON tree looking for a Pinterest `video_list` object.
+ * Pinterest embeds these inside __PWS_DATA__ for video pins.
+ */
+function findMp4InTree(root: unknown): string | null {
+  const stack: unknown[] = [root];
+  while (stack.length) {
+    const node = stack.pop();
+    if (!node || typeof node !== "object") continue;
+    if (Array.isArray(node)) { stack.push(...node); continue; }
+    const o = node as Record<string, unknown>;
+    if (o.video_list) {
+      const url = pickMp4FromVideoList(o.video_list);
+      if (url) return url;
+    }
+    for (const v of Object.values(o)) stack.push(v);
+  }
+  return null;
+}
+
+/**
  * When the lightweight HTML/API scrape returns no video, launch a real
- * Chromium and watch its network for the .mp4 the page actually plays.
+ * Chromium and (a) watch its network for any pinimg .mp4 the page loads,
+ * (b) read the rendered <video> element's src, (c) walk the page's
+ * embedded JSON for video_list. First match wins.
  *
  * Playwright is dynamically imported so the rest of the code path doesn't
- * load it (and so the build doesn't fail if it's not yet installed on the VPS).
- * Returns null if Playwright isn't available or extraction fails.
+ * load it. Returns null if Playwright isn't installed.
  */
 export async function extractWithHeadless(pinUrl: string): Promise<PinMedia | null> {
   let chromium: typeof import("playwright").chromium;
   try {
     ({ chromium } = await import("playwright"));
   } catch {
-    return null; // Playwright not installed — caller treats as failure
+    return null;
   }
 
   let browser: import("playwright").Browser | null = null;
@@ -414,26 +458,65 @@ export async function extractWithHeadless(pinUrl: string): Promise<PinMedia | nu
       userAgent: UA,
       viewport: { width: 1280, height: 1800 },
       locale: "en-US",
+      // Pinterest serves a different DOM to mobile sometimes — desktop UA is fine
+      extraHTTPHeaders: { "Accept-Language": "en-US,en;q=0.9" },
     });
     const page = await ctx.newPage();
 
-    let mp4Url: string | null = null;
+    // Track every pinimg video URL the page touches.
+    const networkMp4s: string[] = [];
+    const networkM3u8s: string[] = []; // master + variant playlists
     page.on("response", (resp) => {
-      if (mp4Url) return;
       const url = resp.url();
-      if (/v\.pinimg\.com\/videos\/.+\.mp4(\?|$)/i.test(url)) mp4Url = url;
+      if (/v\.pinimg\.com\/videos\//i.test(url)) {
+        if (/\.mp4(\?|$)/i.test(url)) networkMp4s.push(url);
+        if (/\.m3u8(\?|$)/i.test(url)) networkM3u8s.push(url);
+      }
     });
 
     await page.goto(pinUrl, { waitUntil: "domcontentloaded", timeout: 30_000 });
 
-    // Trigger any <video> elements; Pinterest sometimes lazy-loads the source.
+    // Wait for any video element to appear (Pinterest lazy-loads players).
+    // No selector match within timeout is OK — image-only pins won't have one.
+    await page.waitForSelector("video", { timeout: 8_000 }).catch(() => {});
+
+    // Force the player to load: scroll into view + try to play. Muted autoplay
+    // is allowed in headless Chromium, so this should make Pinterest fetch the
+    // MP4 from v.pinimg.com.
     await page.evaluate(() => {
       const v = document.querySelector("video") as HTMLVideoElement | null;
-      if (v) v.play().catch(() => {});
+      if (!v) return;
+      v.muted = true;
+      v.scrollIntoView({ block: "center" });
+      v.play().catch(() => {});
     }).catch(() => {});
 
-    // Wait briefly for video network requests to settle.
-    await page.waitForTimeout(4000);
+    // Give the network a moment to actually request the MP4.
+    await page.waitForTimeout(3500);
+
+    // Try to read the <video src> the player ended up using.
+    const domVideoSrc = await page.evaluate(() => {
+      const v = document.querySelector("video") as HTMLVideoElement | null;
+      if (!v) return null;
+      // currentSrc is what the browser actually loaded; src may be lazy
+      return v.currentSrc || v.src || v.querySelector("source")?.getAttribute("src") || null;
+    }).catch(() => null);
+
+    // Last resort: walk every embedded JSON blob for a video_list with MP4 URLs.
+    let jsonMp4: string | null = null;
+    try {
+      const html = await page.content();
+      const blobs = html.matchAll(
+        /<script[^>]*(?:id="__PWS_DATA__"|type="application\/json")[^>]*>([\s\S]*?)<\/script>/gi
+      );
+      for (const m of blobs) {
+        try {
+          const data = JSON.parse(m[1].trim());
+          const url = findMp4InTree(data);
+          if (url) { jsonMp4 = url; break; }
+        } catch { /* skip malformed */ }
+      }
+    } catch { /* ignore */ }
 
     const meta = await page.evaluate(() => {
       const get = (sel: string) => document.querySelector(sel)?.getAttribute("content") ?? null;
@@ -443,15 +526,26 @@ export async function extractWithHeadless(pinUrl: string): Promise<PinMedia | nu
         ogImage: get('meta[property="og:image"]'),
         ogTitle: get('meta[property="og:title"]'),
       };
+    }).catch(() => ({ ogVideo: null, ogVideoSecure: null, ogImage: null, ogTitle: null }));
+
+    // Pick the best MP4 candidate, skipping HLS.
+    const mp4Candidates = [
+      networkMp4s[0],
+      domVideoSrc && /\.mp4(\?|$)/i.test(domVideoSrc) ? domVideoSrc : null,
+      jsonMp4,
+      meta.ogVideoSecure && /\.mp4(\?|$)/i.test(meta.ogVideoSecure) ? meta.ogVideoSecure : null,
+      meta.ogVideo && /\.mp4(\?|$)/i.test(meta.ogVideo) ? meta.ogVideo : null,
+    ].filter((u): u is string => typeof u === "string" && u.length > 0);
+
+    // Prefer the master playlist (no resolution in path) if multiple m3u8s show up.
+    const hlsCandidates = networkM3u8s.sort((a, b) => {
+      const isMaster = (u: string) => /master\.m3u8|hls\.m3u8/i.test(u);
+      return (isMaster(b) ? 1 : 0) - (isMaster(a) ? 1 : 0);
     });
 
-    const videoUrl =
-      mp4Url ??
-      (meta.ogVideoSecure && !meta.ogVideoSecure.includes(".m3u8") ? meta.ogVideoSecure : null) ??
-      (meta.ogVideo && !meta.ogVideo.includes(".m3u8") ? meta.ogVideo : null);
-
     return {
-      videoUrl,
+      videoUrl: mp4Candidates[0] ?? null,
+      hlsUrl: hlsCandidates[0] ?? null,
       imageUrl: meta.ogImage,
       title: (meta.ogTitle ?? "Pinterest Wallpaper").replace(/\s+on\s+Pinterest\s*$/i, "").trim(),
       category: "Anime Wallpaper",
@@ -460,6 +554,63 @@ export async function extractWithHeadless(pinUrl: string): Promise<PinMedia | nu
     return null;
   } finally {
     if (browser) await browser.close().catch(() => {});
+  }
+}
+
+// ─── HLS download via ffmpeg ─────────────────────────────────────────────────
+
+/**
+ * Download a Pinterest HLS stream and remux it into a playable MP4.
+ * Uses `ffmpeg -c copy` (no re-encoding) so it's fast — usually a few seconds
+ * for a 30-second wallpaper clip.
+ *
+ * Throws "ffmpeg not found" if the binary isn't on PATH (caller can fall back
+ * to the pin's static thumbnail then).
+ */
+export async function downloadHlsToMp4(hlsUrl: string): Promise<{ url: string }> {
+  const { spawn } = await import("node:child_process");
+  const { promises: fs } = await import("node:fs");
+  const path = await import("node:path");
+  const os = await import("node:os");
+
+  const tmpFile = path.join(os.tmpdir(), `pin-${Date.now()}-${Math.random().toString(36).slice(2)}.mp4`);
+
+  await new Promise<void>((resolve, reject) => {
+    const ff = spawn("ffmpeg", [
+      "-loglevel", "error",
+      "-headers", `Referer: https://www.pinterest.com/\r\nUser-Agent: ${UA}\r\n`,
+      "-i", hlsUrl,
+      "-c", "copy",
+      "-bsf:a", "aac_adtstoasc",
+      "-movflags", "+faststart",
+      "-y",
+      tmpFile,
+    ], { stdio: ["ignore", "ignore", "pipe"] });
+
+    let stderr = "";
+    ff.stderr?.on("data", (b) => { stderr += b.toString(); });
+
+    ff.on("error", (err) => {
+      const msg = (err as NodeJS.ErrnoException).code === "ENOENT"
+        ? "ffmpeg not found — install with `apt-get install -y ffmpeg`"
+        : err.message;
+      reject(new Error(msg));
+    });
+    ff.on("close", (code) => {
+      if (code === 0) resolve();
+      else reject(new Error(`ffmpeg exited ${code}: ${stderr.slice(0, 300)}`));
+    });
+  });
+
+  try {
+    const buffer = await fs.readFile(tmpFile);
+    if (buffer.byteLength > PINTEREST_MAX_BYTES) {
+      throw new Error("Remuxed video too large (max 100 MB)");
+    }
+    const { url } = await saveBuffer({ buffer, folder: "pinterest", ext: "mp4" });
+    return { url };
+  } finally {
+    await fs.unlink(tmpFile).catch(() => {});
   }
 }
 

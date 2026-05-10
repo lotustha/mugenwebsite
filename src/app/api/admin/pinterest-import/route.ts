@@ -5,6 +5,7 @@ import {
   extractPinMedia,
   extractWithHeadless,
   downloadPinMedia,
+  downloadHlsToMp4,
   type PinMedia,
 } from "@/lib/pinterest";
 
@@ -62,14 +63,47 @@ async function extract(pinUrl: string): Promise<PinMedia> {
     media = null;
   }
 
-  // If we got a video URL OR an image URL, that's enough to import something.
-  if (media && (media.videoUrl || media.imageUrl)) return media;
+  // We have ANY usable media URL — keep going. Headless fallback only fires
+  // if we got nothing at all from the lightweight scrape.
+  if (media && (media.videoUrl || media.hlsUrl || media.imageUrl)) return media;
 
-  // Fall back to a real browser
   const headless = await extractWithHeadless(pinUrl);
-  if (headless && (headless.videoUrl || headless.imageUrl)) return headless;
+  if (headless && (headless.videoUrl || headless.hlsUrl || headless.imageUrl)) return headless;
 
   throw new Error("No media found (HTML scrape and headless both failed)");
+}
+
+/**
+ * Download whichever media URL the pin gave us, in priority order:
+ *   1. Direct MP4 (fastest, single fetch)
+ *   2. HLS via ffmpeg (works for "duplo-hls-video" pins; needs ffmpeg)
+ *   3. Static thumbnail image (last resort if both video paths failed)
+ */
+async function downloadFromMedia(media: PinMedia): Promise<{ url: string; actualType: "IMAGE" | "VIDEO" }> {
+  // 1. Direct MP4
+  if (media.videoUrl && !media.videoUrl.includes(".m3u8")) {
+    return await downloadPinMedia(media.videoUrl, true);
+  }
+
+  // 2. HLS via ffmpeg
+  if (media.hlsUrl) {
+    try {
+      const { url } = await downloadHlsToMp4(media.hlsUrl);
+      return { url, actualType: "VIDEO" };
+    } catch (e) {
+      // ffmpeg missing or remux failed — fall through to thumbnail
+      if (!media.imageUrl) {
+        throw e instanceof Error ? e : new Error("HLS download failed");
+      }
+    }
+  }
+
+  // 3. Image fallback
+  if (media.imageUrl) {
+    return await downloadPinMedia(media.imageUrl, false);
+  }
+
+  throw new Error("No downloadable media URL");
 }
 
 // POST /api/admin/pinterest-import
@@ -111,21 +145,7 @@ export async function POST(request: Request) {
   for (const pin of pins) {
     try {
       const media = await extract(pin.pinUrl);
-
-      let mediaUrl = media.videoUrl ?? media.imageUrl!;
-      let isVideo = !!media.videoUrl;
-
-      // HLS isn't downloadable as a single MP4; fall back to thumbnail if we have one
-      if (isVideo && mediaUrl.includes(".m3u8")) {
-        if (media.imageUrl) {
-          mediaUrl = media.imageUrl;
-          isVideo = false;
-        } else {
-          throw new Error("Only HLS stream available — no MP4 to download");
-        }
-      }
-
-      const { url: fileUrl, actualType } = await downloadPinMedia(mediaUrl, isVideo);
+      const { url: fileUrl, actualType } = await downloadFromMedia(media);
 
       const wallpaper = await prisma.wallpaper.create({
         data: {
