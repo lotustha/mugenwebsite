@@ -51,6 +51,30 @@ export async function resolvePinUrl(raw: string): Promise<string> {
 
 // ─── Search ──────────────────────────────────────────────────────────────────
 
+/**
+ * Strip Pinterest's auto-generated AI caption prefixes from a tile title.
+ * Pinterest decorates a lot of pins with "This may contain: …" / "This contains: …"
+ * which is noise we don't want stored as the wallpaper title.
+ */
+export function cleanPinTitle(raw: string): string {
+  let t = raw.trim();
+  // Strip "This (may )?contain[s]?:" prefixes (case-insensitive)
+  t = t.replace(/^this\s+(?:may\s+)?contains?\s*:\s*/i, "");
+  // Strip "an image of" / "a picture of" lead-ins
+  t = t.replace(/^(?:an?\s+(?:image|picture|photo)\s+of\s+)/i, "");
+  // Strip Pinterest suffix tails
+  t = t.replace(/\s*[|\-–]\s*Pinterest\s*$/i, "")
+       .replace(/\s+on\s+Pinterest\s*$/i, "");
+  // Collapse whitespace
+  t = t.replace(/\s+/g, " ").trim();
+  // First sentence/segment if it's still a wall of text
+  if (t.length > 80) {
+    const firstSegment = t.split(/[|·•]/)[0].trim();
+    if (firstSegment.length >= 10) t = firstSegment;
+  }
+  return t;
+}
+
 /** Normalize a raw Pinterest pin/result object into our PinSearchResult shape. */
 function normalisePinRecord(raw: unknown): PinSearchResult | null {
   if (!raw || typeof raw !== "object") return null;
@@ -78,7 +102,7 @@ function normalisePinRecord(raw: unknown): PinSearchResult | null {
 
   return {
     pinId: id,
-    title: String(title).trim().slice(0, 120),
+    title: cleanPinTitle(String(title)).slice(0, 120) || "Pinterest Wallpaper",
     thumbnailUrl,
     isVideo,
     pinUrl: `https://www.pinterest.com/pin/${id}/`,
@@ -220,10 +244,16 @@ async function searchViaHeadless(query: string, limit: number, scrollDepth = 3):
         const img = (node.querySelector("img") ?? node.closest('[data-test-id="pin"]')?.querySelector("img")) as HTMLImageElement | null;
         if (!img?.src) return;
         const isVideo = !!(node.querySelector('video') ?? node.closest('[data-test-id="pin"]')?.querySelector('[data-test-id*="video"], video'));
+        // Try several places the tile may carry a title before falling back to alt.
+        const linkEl = (node.matches('a[href^="/pin/"]') ? node : node.closest('a[href^="/pin/"]')) as HTMLAnchorElement | null;
+        const rawTitle =
+          linkEl?.getAttribute("aria-label") ||
+          img.alt ||
+          "";
         seen.add(id);
         out.push({
           pinId: id,
-          title: img.alt?.trim().slice(0, 120) || "Pinterest Wallpaper",
+          title: rawTitle.trim().slice(0, 200),
           thumbnailUrl: img.src,
           isVideo,
         });
@@ -233,6 +263,7 @@ async function searchViaHeadless(query: string, limit: number, scrollDepth = 3):
 
     return harvested.map((h) => ({
       ...h,
+      title: cleanPinTitle(h.title).slice(0, 120) || "Pinterest Wallpaper",
       pinUrl: `https://www.pinterest.com/pin/${h.pinId}/`,
     }));
   } finally {
@@ -356,14 +387,14 @@ export async function extractPinMedia(pinUrl: string): Promise<PinMedia> {
     html.match(/<meta[^>]+content="([^"]+)"[^>]+property="og:video:secure_url"/i)?.[1] ??
     html.match(/<meta[^>]+property="og:video"[^>]+content="([^"]+)"/i)?.[1] ??
     html.match(/<meta[^>]+content="([^"]+)"[^>]+property="og:video"/i)?.[1] ??
-    unescaped.match(/https?:\/\/v\.pinimg\.com\/videos\/[^\s"'>]+\.mp4/)?.[0] ??
-    html.match(/https?:\/\/v\.pinimg\.com\/videos\/[^\s"'>]+\.mp4/)?.[0] ??
+    unescaped.match(/https?:\/\/v\d*\.pinimg\.com\/videos\/[^\s"'>]+\.mp4/)?.[0] ??
+    html.match(/https?:\/\/v\d*\.pinimg\.com\/videos\/[^\s"'>]+\.mp4/)?.[0] ??
     null;
 
   if (!videoUrl) {
     for (const quality of ["V_1080P", "V_720P", "V_480P", "V_360P"]) {
       const m = unescaped.match(
-        new RegExp(`"${quality}"\\s*:\\s*\\{[^}]*?"url"\\s*:\\s*"(https://v\\.pinimg\\.com[^"]+\\.mp4[^"]*)"`)
+        new RegExp(`"${quality}"\\s*:\\s*\\{[^}]*?"url"\\s*:\\s*"(https://v\\d*\\.pinimg\\.com[^"]+\\.mp4[^"]*)"`)
       );
       if (m?.[1]) { videoUrl = m[1]; break; }
     }
@@ -376,8 +407,8 @@ export async function extractPinMedia(pinUrl: string): Promise<PinMedia> {
 
   // Pinterest "duplo-hls-video" pins serve only HLS — capture the m3u8 URL.
   const hlsUrl =
-    unescaped.match(/https?:\/\/v\.pinimg\.com\/videos\/[^\s"'>]+\.m3u8[^"'\s>]*/)?.[0] ??
-    html.match(/https?:\/\/v\.pinimg\.com\/videos\/[^\s"'>]+\.m3u8[^"'\s>]*/)?.[0] ??
+    unescaped.match(/https?:\/\/v\d*\.pinimg\.com\/videos\/[^\s"'>]+\.m3u8[^"'\s>]*/)?.[0] ??
+    html.match(/https?:\/\/v\d*\.pinimg\.com\/videos\/[^\s"'>]+\.m3u8[^"'\s>]*/)?.[0] ??
     null;
 
   const imageUrl =
@@ -391,10 +422,7 @@ export async function extractPinMedia(pinUrl: string): Promise<PinMedia> {
     html.match(/<title[^>]*>([^<]+)<\/title>/i)?.[1] ??
     "Pinterest Wallpaper";
 
-  const title = rawTitle
-    .replace(/\s*[|\-–]\s*Pinterest\s*$/i, "")
-    .replace(/\s+on\s+Pinterest\s*$/i, "")
-    .trim() || "Pinterest Wallpaper";
+  const title = cleanPinTitle(rawTitle) || "Pinterest Wallpaper";
 
   let category = "Anime Wallpaper";
   const jsonMatch = html.match(/<script[^>]+id="__PWS_DATA__"[^>]*>(\{[\s\S]*?\})<\/script>/i);
@@ -497,7 +525,7 @@ export async function extractWithHeadless(pinUrl: string): Promise<PinMedia | nu
     const networkM3u8s: string[] = []; // master + variant playlists
     page.on("response", (resp) => {
       const url = resp.url();
-      if (/v\.pinimg\.com\/videos\//i.test(url)) {
+      if (/v\d*\.pinimg\.com\/videos\//i.test(url)) {
         if (/\.mp4(\?|$)/i.test(url)) networkMp4s.push(url);
         if (/\.m3u8(\?|$)/i.test(url)) networkM3u8s.push(url);
       }
@@ -576,7 +604,7 @@ export async function extractWithHeadless(pinUrl: string): Promise<PinMedia | nu
       videoUrl: mp4Candidates[0] ?? null,
       hlsUrl: hlsCandidates[0] ?? null,
       imageUrl: meta.ogImage,
-      title: (meta.ogTitle ?? "Pinterest Wallpaper").replace(/\s+on\s+Pinterest\s*$/i, "").trim(),
+      title: cleanPinTitle(meta.ogTitle ?? "") || "Pinterest Wallpaper",
       category: "Anime Wallpaper",
     };
   } catch {
