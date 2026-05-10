@@ -18,6 +18,11 @@ interface PinResult {
   url: string; status: "pending" | "processing" | "ok" | "error";
   error?: string; wallpaper?: Wallpaper; category?: string;
 }
+interface PinSearchResult {
+  pinId: string; title: string; thumbnailUrl: string;
+  isVideo: boolean; pinUrl: string;
+}
+type ImportMode = "search" | "urls";
 type Tab = "import" | "upload" | "library";
 
 // ─── Design tokens ────────────────────────────────────────────────────────────
@@ -329,6 +334,80 @@ function PinRow({ result }: { result: PinResult }) {
   );
 }
 
+// Thumbnail card for the search-results grid. Click toggles selection.
+function PinThumb({
+  pin, selected, status, onClick,
+}: {
+  pin: PinSearchResult;
+  selected: boolean;
+  status?: "processing" | "ok" | "error";
+  onClick: () => void;
+}) {
+  return (
+    <button type="button" onClick={onClick}
+      className="relative aspect-[9/16] rounded-lg overflow-hidden cursor-pointer transition-all duration-150 group"
+      style={{
+        border: selected ? `2px solid ${accentPurple}` : `1px solid ${border}`,
+        boxShadow: selected ? `0 0 0 3px rgba(139,92,246,0.18)` : "none",
+        opacity: status === "ok" ? 0.55 : 1,
+      }}>
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src={pin.thumbnailUrl} alt={pin.title}
+        className="absolute inset-0 w-full h-full object-cover"
+        loading="lazy" referrerPolicy="no-referrer" />
+
+      {/* Video badge */}
+      {pin.isVideo && (
+        <span className="absolute top-1.5 left-1.5 inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md font-body text-[0.5625rem] font-semibold"
+          style={{ background: "rgba(6,14,32,0.85)", color: "#e2d5ff", backdropFilter: "blur(6px)" }}>
+          <svg viewBox="0 0 12 12" fill="currentColor" className="w-2.5 h-2.5"><path d="M3 2.25v7.5L9.75 6 3 2.25Z" /></svg>
+          VIDEO
+        </span>
+      )}
+
+      {/* Selection checkmark */}
+      <span className="absolute top-1.5 right-1.5 w-5 h-5 rounded-md flex items-center justify-center transition-all"
+        style={{
+          background: selected ? accentPurple : "rgba(6,14,32,0.7)",
+          border: selected ? `1px solid ${accentPurple}` : `1px solid rgba(255,255,255,0.2)`,
+          backdropFilter: "blur(6px)",
+        }}>
+        {selected && (
+          <svg viewBox="0 0 12 12" fill="currentColor" className="w-3 h-3 text-white">
+            <path fillRule="evenodd" d="M10.28 3.22a.75.75 0 0 1 0 1.06l-5 5a.75.75 0 0 1-1.06 0l-2-2a.75.75 0 0 1 1.06-1.06L4.75 7.69l4.47-4.47a.75.75 0 0 1 1.06 0Z" clipRule="evenodd" />
+          </svg>
+        )}
+      </span>
+
+      {/* Status overlay */}
+      {status && (
+        <div className="absolute inset-0 flex items-center justify-center"
+          style={{ background: status === "error" ? "rgba(127,29,29,0.5)" : status === "ok" ? "rgba(20,83,45,0.45)" : "rgba(6,14,32,0.55)" }}>
+          {status === "processing" && (
+            <div className="w-5 h-5 rounded-full border-2 animate-spin" style={{ borderColor: "rgba(255,255,255,0.25)", borderTopColor: "white" }} />
+          )}
+          {status === "ok" && (
+            <svg viewBox="0 0 24 24" fill="currentColor" className="w-7 h-7" style={{ color: "#4ade80" }}>
+              <path fillRule="evenodd" d="M2.25 12c0-5.385 4.365-9.75 9.75-9.75s9.75 4.365 9.75 9.75-4.365 9.75-9.75 9.75S2.25 17.385 2.25 12Zm13.36-1.814a.75.75 0 1 0-1.22-.872l-3.236 4.53L9.53 12.22a.75.75 0 0 0-1.06 1.06l2.25 2.25a.75.75 0 0 0 1.14-.094l3.75-5.25Z" clipRule="evenodd" />
+            </svg>
+          )}
+          {status === "error" && (
+            <svg viewBox="0 0 24 24" fill="currentColor" className="w-7 h-7" style={{ color: "#f87171" }}>
+              <path fillRule="evenodd" d="M2.25 12c0-5.385 4.365-9.75 9.75-9.75s9.75 4.365 9.75 9.75-4.365 9.75-9.75 9.75S2.25 17.385 2.25 12Zm8.47-3.97a.75.75 0 0 1 1.06 0L12 9.94l1.72-1.72a.75.75 0 1 1 1.06 1.06L13.06 11l1.72 1.72a.75.75 0 1 1-1.06 1.06L12 12.06l-1.72 1.72a.75.75 0 0 1-1.06-1.06L10.94 11l-1.72-1.72a.75.75 0 0 1 0-1.06Z" clipRule="evenodd" />
+            </svg>
+          )}
+        </div>
+      )}
+
+      {/* Title bar */}
+      <div className="absolute bottom-0 left-0 right-0 px-2 py-1.5 font-body text-[0.625rem] truncate"
+        style={{ background: "linear-gradient(to top, rgba(6,14,32,0.9), transparent)", color: "rgba(222,229,255,0.75)" }}>
+        {pin.title}
+      </div>
+    </button>
+  );
+}
+
 function PinterestImporter({
   onImported, categories, onCreateCategory,
 }: {
@@ -336,125 +415,353 @@ function PinterestImporter({
   categories: WallpaperCategory[];
   onCreateCategory: (name: string) => Promise<WallpaperCategory | null>;
 }) {
-  const [text, setText] = useState("");
-  const [results, setResults] = useState<PinResult[]>([]);
-  const [running, setRunning] = useState(false);
+  const [mode, setMode] = useState<ImportMode>("search");
+
+  // Shared assignment fields (apply to whichever mode imports)
   const [selectedCategory, setSelectedCategory] = useState<WallpaperCategory[]>([]);
+  const [tagsInput, setTagsInput] = useState("");
+  const tagNames = tagsInput.split(",").map((t) => t.trim()).filter(Boolean);
+
+  // ── Search-mode state ─────────────────────────────────────────────────────
+  const [query, setQuery] = useState("");
+  const [searching, setSearching] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
+  const [searchResults, setSearchResults] = useState<PinSearchResult[]>([]);
+  const [selectedPins, setSelectedPins] = useState<Set<string>>(new Set());
+  const [importStatus, setImportStatus] = useState<Map<string, "processing" | "ok" | "error">>(new Map());
+  const [importErrors, setImportErrors] = useState<Map<string, string>>(new Map());
+  const [importing, setImporting] = useState(false);
+
+  // ── URL-mode state ────────────────────────────────────────────────────────
+  const [text, setText] = useState("");
+  const [urlResults, setUrlResults] = useState<PinResult[]>([]);
+  const [urlRunning, setUrlRunning] = useState(false);
 
   const parsedUrls = text.split(/[\n,]+/).map((u) => u.trim())
     .filter((u) => u.length > 0 && (u.includes("pinterest") || u.includes("pin.it")));
 
-  const handleImport = async () => {
-    if (!parsedUrls.length || running) return;
-    setRunning(true);
-    setResults(parsedUrls.map((url) => ({ url, status: "pending" })));
+  // ── Search handlers ───────────────────────────────────────────────────────
+  const handleSearch = async () => {
+    if (!query.trim() || searching) return;
+    setSearching(true);
+    setSearchError(null);
+    setSearchResults([]);
+    setSelectedPins(new Set());
+    setImportStatus(new Map());
+    setImportErrors(new Map());
+    try {
+      const res = await fetch("/api/admin/pinterest-search", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ query: query.trim(), limit: 30 }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setSearchError(data.error ?? "Search failed");
+      } else {
+        setSearchResults(data.results ?? []);
+      }
+    } catch {
+      setSearchError("Network error");
+    }
+    setSearching(false);
+  };
+
+  const togglePin = (pinId: string) => {
+    setSelectedPins((prev) => {
+      const next = new Set(prev);
+      if (next.has(pinId)) next.delete(pinId); else next.add(pinId);
+      return next;
+    });
+  };
+
+  const selectAllVideos = () => {
+    setSelectedPins(new Set(searchResults.filter((r) => r.isVideo).map((r) => r.pinId)));
+  };
+  const selectAll = () => setSelectedPins(new Set(searchResults.map((r) => r.pinId)));
+  const clearSelection = () => setSelectedPins(new Set());
+
+  const handleSearchImport = async () => {
+    if (!selectedPins.size || importing) return;
+    setImporting(true);
+    const pins = searchResults
+      .filter((r) => selectedPins.has(r.pinId))
+      .map((r) => ({ pinId: r.pinId, pinUrl: r.pinUrl, title: r.title }));
+
+    // Mark all selected as processing
+    setImportStatus((prev) => {
+      const next = new Map(prev);
+      for (const p of pins) next.set(p.pinId, "processing");
+      return next;
+    });
+
+    try {
+      const res = await fetch("/api/admin/pinterest-import", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          pins,
+          categoryId: selectedCategory[0]?.id,
+          tagNames,
+        }),
+      });
+      const data = await res.json();
+      const results: Array<{ pinId: string; status: "ok" | "error"; error?: string; wallpaper?: Wallpaper }> = data.results ?? [];
+
+      setImportStatus((prev) => {
+        const next = new Map(prev);
+        for (const r of results) next.set(r.pinId, r.status);
+        return next;
+      });
+      setImportErrors((prev) => {
+        const next = new Map(prev);
+        for (const r of results) if (r.error) next.set(r.pinId, r.error);
+        return next;
+      });
+      for (const r of results) {
+        if (r.status === "ok" && r.wallpaper) onImported(r.wallpaper);
+      }
+    } catch {
+      setImportStatus((prev) => {
+        const next = new Map(prev);
+        for (const p of pins) next.set(p.pinId, "error");
+        return next;
+      });
+    }
+    setImporting(false);
+  };
+
+  const okCount = Array.from(importStatus.values()).filter((s) => s === "ok").length;
+  const errCount = Array.from(importStatus.values()).filter((s) => s === "error").length;
+
+  // ── URL-mode handler ──────────────────────────────────────────────────────
+  const handleUrlImport = async () => {
+    if (!parsedUrls.length || urlRunning) return;
+    setUrlRunning(true);
+    setUrlResults(parsedUrls.map((url) => ({ url, status: "pending" })));
     const categoryId = selectedCategory[0]?.id;
     for (const url of parsedUrls) {
-      setResults((p) => p.map((r) => r.url === url ? { ...r, status: "processing" } : r));
+      setUrlResults((p) => p.map((r) => r.url === url ? { ...r, status: "processing" } : r));
       try {
         const res = await fetch("/api/admin/pinterest-scrape", {
           method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ urls: [url], ...(categoryId ? { categoryId } : {}) }),
+          body: JSON.stringify({
+            urls: [url],
+            ...(categoryId ? { categoryId } : {}),
+            ...(tagNames.length ? { tagNames } : {}),
+          }),
         });
         const data = await res.json();
         const result = data.results?.[0];
         if (!result) {
-          setResults((p) => p.map((r) => r.url === url ? { ...r, status: "error", error: "No response" } : r));
+          setUrlResults((p) => p.map((r) => r.url === url ? { ...r, status: "error", error: "No response" } : r));
           continue;
         }
-        setResults((p) => p.map((r) => r.url === url ? { ...r, ...result } : r));
+        setUrlResults((p) => p.map((r) => r.url === url ? { ...r, ...result } : r));
         if (result.status === "ok" && result.wallpaper) onImported(result.wallpaper);
       } catch {
-        setResults((p) => p.map((r) => r.url === url ? { ...r, status: "error", error: "Network error" } : r));
+        setUrlResults((p) => p.map((r) => r.url === url ? { ...r, status: "error", error: "Network error" } : r));
       }
     }
-    setRunning(false);
+    setUrlRunning(false);
   };
 
-  const done = results.filter((r) => r.status !== "pending" && r.status !== "processing").length;
-  const ok = results.filter((r) => r.status === "ok").length;
-  const err = results.filter((r) => r.status === "error").length;
+  const urlDone = urlResults.filter((r) => r.status !== "pending" && r.status !== "processing").length;
+  const urlOk = urlResults.filter((r) => r.status === "ok").length;
+  const urlErr = urlResults.filter((r) => r.status === "error").length;
 
+  // ── Render ────────────────────────────────────────────────────────────────
   return (
     <div className="space-y-5">
-      {/* Intro */}
-      <div className="flex items-start gap-3 p-4 rounded-xl" style={{ background: "rgba(139,92,246,0.07)", border: "1px solid rgba(139,92,246,0.18)" }}>
-        <svg viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4 flex-none mt-0.5" style={{ color: accentPurple }}>
-          <path fillRule="evenodd" d="M2.25 12c0-5.385 4.365-9.75 9.75-9.75s9.75 4.365 9.75 9.75-4.365 9.75-9.75 9.75S2.25 17.385 2.25 12Zm8.706-1.442c1.146-.573 2.437.463 2.126 1.706l-.709 2.836.042-.02a.75.75 0 0 1 .67 1.34l-.04.022c-1.147.573-2.438-.463-2.127-1.706l.71-2.836-.042.02a.75.75 0 1 1-.671-1.34l.041-.022ZM12 9a.75.75 0 1 0 0-1.5.75.75 0 0 0 0 1.5Z" clipRule="evenodd" />
-        </svg>
-        <p className="font-body text-xs leading-relaxed" style={{ color: "rgba(222,229,255,0.55)" }}>
-          Paste Pinterest pin URLs below. Select a category to assign all imported pins to — this overrides auto-detection.
-        </p>
-      </div>
-
-      {/* Category selector */}
-      <div>
-        <FieldLabel>Assign to Category (optional)</FieldLabel>
-        <CategoryCombobox
-          categories={categories}
-          selected={selectedCategory}
-          onChange={(cats) => setSelectedCategory(cats.slice(-1))}
-          onCreateCategory={onCreateCategory}
-          placeholder="Pick or create a category for these pins…"
-        />
-        <p className="mt-1 font-body text-[0.625rem]" style={{ color: textDim }}>
-          {selectedCategory.length > 0
-            ? <>All pins will be imported into <span style={{ color: "#ba9eff" }}>{selectedCategory[0].name}</span></>
-            : "Leave blank to import without a category"}
-        </p>
-      </div>
-
-      {/* URL input */}
-      <div>
-        <FieldLabel>Pinterest Pin URLs — one per line or comma-separated</FieldLabel>
-        <textarea value={text} onChange={(e) => setText(e.target.value)} disabled={running}
-          placeholder={"https://www.pinterest.com/pin/123456789/\nhttps://pin.it/XXXXXXX"}
-          rows={5} className={`${inputCls} resize-none font-mono text-[0.6875rem] leading-relaxed`}
-          style={{ ...inputSt, opacity: running ? 0.6 : 1 }} />
-        <p className="mt-1.5 font-body text-xs tabular-nums" style={{ color: textDim }}>
-          {parsedUrls.length > 0
-            ? <><span style={{ color: accentPurple }}>{parsedUrls.length}</span> URL{parsedUrls.length !== 1 ? "s" : ""} detected</>
-            : "Paste Pinterest pin URLs above"}
-        </p>
-      </div>
-
-      {/* Actions */}
-      <div className="flex items-center gap-3 flex-wrap">
-        <GradientBtn onClick={handleImport} disabled={running || !parsedUrls.length}>
-          {running
-            ? <><div className="w-3.5 h-3.5 rounded-full border-2 border-white/30 border-t-white animate-spin" />Importing…</>
-            : <><svg viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4"><path d="M10.75 2.75a.75.75 0 0 0-1.5 0v8.614L6.295 8.235a.75.75 0 1 0-1.09 1.03l4.25 4.5a.75.75 0 0 0 1.09 0l4.25-4.5a.75.75 0 0 0-1.09-1.03l-2.955 3.129V2.75Z" /><path d="M3.5 12.75a.75.75 0 0 0-1.5 0v2.5A2.75 2.75 0 0 0 4.75 18h10.5A2.75 2.75 0 0 0 18 15.25v-2.5a.75.75 0 0 0-1.5 0v2.5c0 .69-.56 1.25-1.25 1.25H4.75c-.69 0-1.25-.56-1.25-1.25v-2.5Z" /></svg>
-              Import {parsedUrls.length > 0 ? parsedUrls.length : ""} Pin{parsedUrls.length !== 1 ? "s" : ""}</>
-          }
-        </GradientBtn>
-        {results.length > 0 && !running && (
-          <>
-            {ok > 0 && <span className="font-body text-xs font-medium" style={{ color: "#4ade80" }}>{ok} imported</span>}
-            {err > 0 && <span className="font-body text-xs font-medium" style={{ color: "#f87171" }}>{err} failed</span>}
-            <button type="button" onClick={() => { setResults([]); setText(""); }}
-              className="font-body text-xs cursor-pointer hover:text-text-main/60 transition-colors"
-              style={{ color: textDim }}>
-              Clear
+      {/* Mode toggle */}
+      <div className="flex gap-1 p-1 rounded-xl" style={{ background: surfaceDeep, border: `1px solid ${border}` }}>
+        {([
+          { id: "search" as ImportMode, label: "Search Pinterest", icon: (
+            <svg viewBox="0 0 20 20" fill="currentColor" className="w-3.5 h-3.5"><path fillRule="evenodd" d="M9 3.5a5.5 5.5 0 1 0 0 11 5.5 5.5 0 0 0 0-11ZM2 9a7 7 0 1 1 12.452 4.391l3.328 3.329a.75.75 0 1 1-1.06 1.06l-3.329-3.328A7 7 0 0 1 2 9Z" clipRule="evenodd" /></svg>
+          )},
+          { id: "urls" as ImportMode, label: "Paste URLs", icon: (
+            <svg viewBox="0 0 20 20" fill="currentColor" className="w-3.5 h-3.5"><path fillRule="evenodd" d="M12.586 4.586a2 2 0 1 1 2.828 2.828l-3 3a2 2 0 0 1-2.828 0 1 1 0 0 0-1.414 1.414 4 4 0 0 0 5.656 0l3-3a4 4 0 0 0-5.656-5.656l-1.5 1.5a1 1 0 1 0 1.414 1.414l1.5-1.5Zm-5 5a2 2 0 0 1 2.828 0 1 1 0 1 0 1.414-1.414 4 4 0 0 0-5.656 0l-3 3a4 4 0 1 0 5.656 5.656l1.5-1.5a1 1 0 1 0-1.414-1.414l-1.5 1.5a2 2 0 1 1-2.828-2.828l3-3Z" clipRule="evenodd" /></svg>
+          )},
+        ]).map(({ id, label, icon }) => {
+          const isActive = mode === id;
+          return (
+            <button key={id} type="button" onClick={() => setMode(id)}
+              className="flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-lg font-body text-xs font-medium cursor-pointer transition-all duration-200"
+              style={{
+                background: isActive ? `linear-gradient(135deg,rgba(139,92,246,0.25),rgba(217,70,239,0.15))` : "transparent",
+                color: isActive ? "#e2d5ff" : textMuted,
+                border: isActive ? `1px solid rgba(139,92,246,0.35)` : "1px solid transparent",
+              }}>
+              <span style={{ color: isActive ? accentPurple : textMuted }}>{icon}</span>
+              {label}
             </button>
-          </>
-        )}
+          );
+        })}
       </div>
 
-      {/* Progress */}
-      {results.length > 0 && (
-        <div className="rounded-xl overflow-hidden" style={{ background: surfaceDeep, border: `1px solid ${border}` }}>
-          <div className="px-4 py-2.5 flex items-center justify-between border-b" style={{ borderColor: "rgba(255,255,255,0.05)", background: "rgba(6,14,32,0.4)" }}>
-            <span className="font-body text-[0.6875rem] uppercase tracking-widest font-semibold" style={{ color: textMuted }}>Progress</span>
-            <div className="flex items-center gap-3">
-              <div className="h-1.5 w-24 rounded-full overflow-hidden" style={{ background: "rgba(255,255,255,0.06)" }}>
-                <div className="h-full rounded-full transition-all duration-500"
-                  style={{ width: `${(done / results.length) * 100}%`, background: `linear-gradient(90deg,${accentPurple},${accentMagenta})` }} />
-              </div>
-              <span className="font-mono text-[0.6875rem] tabular-nums" style={{ color: textDim }}>{done}/{results.length}</span>
-            </div>
-          </div>
-          <div className="px-4">{results.map((r) => <PinRow key={r.url} result={r} />)}</div>
+      {/* Shared category + tags */}
+      <div className="grid sm:grid-cols-2 gap-3">
+        <div>
+          <FieldLabel>Assign to Category {mode === "search" ? "" : "(optional)"}</FieldLabel>
+          <CategoryCombobox
+            categories={categories}
+            selected={selectedCategory}
+            onChange={(cats) => setSelectedCategory(cats.slice(-1))}
+            onCreateCategory={onCreateCategory}
+            placeholder="Pick or create a category…"
+          />
         </div>
+        <div>
+          <FieldLabel>Tags (comma-separated)</FieldLabel>
+          <input value={tagsInput} onChange={(e) => setTagsInput(e.target.value)}
+            placeholder="naruto, live wallpaper, anime"
+            className={inputCls} style={inputSt} />
+          <p className="mt-1 font-body text-[0.625rem]" style={{ color: textDim }}>
+            {tagNames.length > 0
+              ? <><span style={{ color: "#a78bfa" }}>{tagNames.length}</span> tag{tagNames.length !== 1 ? "s" : ""} will be applied</>
+              : "Tags help users search for these wallpapers"}
+          </p>
+        </div>
+      </div>
+
+      {mode === "search" ? (
+        <>
+          {/* Search input */}
+          <div>
+            <FieldLabel>Search Pinterest</FieldLabel>
+            <div className="flex gap-2">
+              <input value={query} onChange={(e) => setQuery(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); handleSearch(); } }}
+                disabled={searching || importing}
+                placeholder='e.g. "Naruto Live Wallpaper 4K"'
+                className={inputCls} style={inputSt} />
+              <GradientBtn onClick={handleSearch} disabled={searching || !query.trim()}>
+                {searching
+                  ? <><div className="w-3.5 h-3.5 rounded-full border-2 border-white/30 border-t-white animate-spin" />Searching…</>
+                  : <>Search</>
+                }
+              </GradientBtn>
+            </div>
+            {searchError && (
+              <p className="mt-1.5 font-body text-xs" style={{ color: "#f87171" }}>{searchError}</p>
+            )}
+          </div>
+
+          {searchResults.length > 0 && (
+            <>
+              {/* Selection toolbar */}
+              <div className="flex items-center justify-between flex-wrap gap-2 px-3 py-2 rounded-lg"
+                style={{ background: surfaceDeep, border: `1px solid ${border}` }}>
+                <span className="font-body text-xs" style={{ color: textMuted }}>
+                  <span style={{ color: "white" }}>{searchResults.length}</span> results
+                  {selectedPins.size > 0 && (
+                    <> · <span style={{ color: "#ba9eff" }}>{selectedPins.size}</span> selected</>
+                  )}
+                </span>
+                <div className="flex items-center gap-1.5">
+                  <GhostBtn onClick={selectAllVideos}>Select all videos</GhostBtn>
+                  <GhostBtn onClick={selectAll}>Select all</GhostBtn>
+                  {selectedPins.size > 0 && <GhostBtn onClick={clearSelection}>Clear</GhostBtn>}
+                </div>
+              </div>
+
+              {/* Grid */}
+              <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-2">
+                {searchResults.map((pin) => (
+                  <PinThumb key={pin.pinId}
+                    pin={pin}
+                    selected={selectedPins.has(pin.pinId)}
+                    status={importStatus.get(pin.pinId)}
+                    onClick={() => togglePin(pin.pinId)} />
+                ))}
+              </div>
+
+              {/* Failed-pin error list */}
+              {importErrors.size > 0 && (
+                <div className="rounded-xl overflow-hidden" style={{ background: surfaceDeep, border: `1px solid ${border}` }}>
+                  <div className="px-4 py-2 font-body text-[0.6875rem] uppercase tracking-widest font-semibold border-b"
+                    style={{ color: "#f87171", borderColor: "rgba(255,255,255,0.05)", background: "rgba(239,68,68,0.05)" }}>
+                    {importErrors.size} pin{importErrors.size !== 1 ? "s" : ""} failed
+                  </div>
+                  <ul className="px-4 py-2 space-y-1">
+                    {Array.from(importErrors.entries()).slice(0, 8).map(([pinId, err]) => (
+                      <li key={pinId} className="font-mono text-[0.6875rem]" style={{ color: "rgba(248,113,113,0.85)" }}>
+                        <span style={{ color: textDim }}>{pinId}</span> — {err}
+                      </li>
+                    ))}
+                    {importErrors.size > 8 && (
+                      <li className="font-body text-[0.625rem]" style={{ color: textDim }}>
+                        …and {importErrors.size - 8} more
+                      </li>
+                    )}
+                  </ul>
+                </div>
+              )}
+
+              {/* Import action */}
+              <div className="flex items-center gap-3 flex-wrap">
+                <GradientBtn onClick={handleSearchImport} disabled={importing || selectedPins.size === 0}>
+                  {importing
+                    ? <><div className="w-3.5 h-3.5 rounded-full border-2 border-white/30 border-t-white animate-spin" />Importing {selectedPins.size}…</>
+                    : <>Import {selectedPins.size > 0 ? selectedPins.size : ""} selected</>
+                  }
+                </GradientBtn>
+                {okCount > 0 && <span className="font-body text-xs font-medium" style={{ color: "#4ade80" }}>{okCount} imported</span>}
+                {errCount > 0 && <span className="font-body text-xs font-medium" style={{ color: "#f87171" }}>{errCount} failed</span>}
+              </div>
+            </>
+          )}
+        </>
+      ) : (
+        <>
+          {/* URL input */}
+          <div>
+            <FieldLabel>Pinterest Pin URLs — one per line or comma-separated</FieldLabel>
+            <textarea value={text} onChange={(e) => setText(e.target.value)} disabled={urlRunning}
+              placeholder={"https://www.pinterest.com/pin/123456789/\nhttps://pin.it/XXXXXXX"}
+              rows={5} className={`${inputCls} resize-none font-mono text-[0.6875rem] leading-relaxed`}
+              style={{ ...inputSt, opacity: urlRunning ? 0.6 : 1 }} />
+            <p className="mt-1.5 font-body text-xs tabular-nums" style={{ color: textDim }}>
+              {parsedUrls.length > 0
+                ? <><span style={{ color: accentPurple }}>{parsedUrls.length}</span> URL{parsedUrls.length !== 1 ? "s" : ""} detected</>
+                : "Paste Pinterest pin URLs above"}
+            </p>
+          </div>
+
+          <div className="flex items-center gap-3 flex-wrap">
+            <GradientBtn onClick={handleUrlImport} disabled={urlRunning || !parsedUrls.length}>
+              {urlRunning
+                ? <><div className="w-3.5 h-3.5 rounded-full border-2 border-white/30 border-t-white animate-spin" />Importing…</>
+                : <>Import {parsedUrls.length > 0 ? parsedUrls.length : ""} Pin{parsedUrls.length !== 1 ? "s" : ""}</>
+              }
+            </GradientBtn>
+            {urlResults.length > 0 && !urlRunning && (
+              <>
+                {urlOk > 0 && <span className="font-body text-xs font-medium" style={{ color: "#4ade80" }}>{urlOk} imported</span>}
+                {urlErr > 0 && <span className="font-body text-xs font-medium" style={{ color: "#f87171" }}>{urlErr} failed</span>}
+                <button type="button" onClick={() => { setUrlResults([]); setText(""); }}
+                  className="font-body text-xs cursor-pointer hover:text-text-main/60 transition-colors"
+                  style={{ color: textDim }}>
+                  Clear
+                </button>
+              </>
+            )}
+          </div>
+
+          {urlResults.length > 0 && (
+            <div className="rounded-xl overflow-hidden" style={{ background: surfaceDeep, border: `1px solid ${border}` }}>
+              <div className="px-4 py-2.5 flex items-center justify-between border-b" style={{ borderColor: "rgba(255,255,255,0.05)", background: "rgba(6,14,32,0.4)" }}>
+                <span className="font-body text-[0.6875rem] uppercase tracking-widest font-semibold" style={{ color: textMuted }}>Progress</span>
+                <div className="flex items-center gap-3">
+                  <div className="h-1.5 w-24 rounded-full overflow-hidden" style={{ background: "rgba(255,255,255,0.06)" }}>
+                    <div className="h-full rounded-full transition-all duration-500"
+                      style={{ width: `${(urlDone / urlResults.length) * 100}%`, background: `linear-gradient(90deg,${accentPurple},${accentMagenta})` }} />
+                  </div>
+                  <span className="font-mono text-[0.6875rem] tabular-nums" style={{ color: textDim }}>{urlDone}/{urlResults.length}</span>
+                </div>
+              </div>
+              <div className="px-4">{urlResults.map((r) => <PinRow key={r.url} result={r} />)}</div>
+            </div>
+          )}
+        </>
       )}
     </div>
   );
