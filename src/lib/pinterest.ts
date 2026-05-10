@@ -53,21 +53,29 @@ export async function resolvePinUrl(raw: string): Promise<string> {
 
 /**
  * Strip Pinterest's auto-generated AI caption prefixes from a tile title.
- * Pinterest decorates a lot of pins with "This may contain: …" / "This contains: …"
- * which is noise we don't want stored as the wallpaper title.
+ * Pinterest decorates pins with phrases like:
+ *   "This may contain: …"
+ *   "This contains: …"
+ *   "This contains an image of: …"
+ *   "This may contain a video of: …"
+ * — all noise we don't want stored as the wallpaper title.
  */
 export function cleanPinTitle(raw: string): string {
   let t = raw.trim();
-  // Strip "This (may )?contain[s]?:" prefixes (case-insensitive)
-  t = t.replace(/^this\s+(?:may\s+)?contains?\s*:\s*/i, "");
-  // Strip "an image of" / "a picture of" lead-ins
-  t = t.replace(/^(?:an?\s+(?:image|picture|photo)\s+of\s+)/i, "");
-  // Strip Pinterest suffix tails
-  t = t.replace(/\s*[|\-–]\s*Pinterest\s*$/i, "")
-       .replace(/\s+on\s+Pinterest\s*$/i, "");
-  // Collapse whitespace
+  // 1) "This (may )?contain[s]?( an X of)?:?  …"
+  t = t.replace(
+    /^this\s+(?:may\s+)?contains?\s+(?:an?\s+(?:image|picture|photo|video)\s+of\b)?\s*:?\s*/i,
+    ""
+  );
+  // 2) Standalone "an image of" / "a picture of" lead-in (no "This contains" prefix)
+  t = t.replace(/^(?:an?\s+(?:image|picture|photo|video)\s+of\s+)/i, "");
+  // 3) Pinterest suffix tails
+  t = t
+    .replace(/\s*[|\-–]\s*Pinterest\s*$/i, "")
+    .replace(/\s+on\s+Pinterest\s*$/i, "");
+  // 4) Collapse whitespace
   t = t.replace(/\s+/g, " ").trim();
-  // First sentence/segment if it's still a wall of text
+  // 5) First sentence/segment if it's still a wall of text
   if (t.length > 80) {
     const firstSegment = t.split(/[|·•]/)[0].trim();
     if (firstSegment.length >= 10) t = firstSegment;

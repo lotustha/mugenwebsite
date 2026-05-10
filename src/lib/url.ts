@@ -51,23 +51,36 @@ export function absolutizeUrl(url: string | null | undefined): string | null | u
 }
 
 /**
+ * True only for `{}` literals / Object.create(null). Crucially false for
+ * Date, Buffer, Map, Set, RegExp, etc. — recursing into a Date drops the
+ * timestamp because a Date has no own enumerable keys, leaving "{}" in
+ * its place which then breaks JSON.stringify's normal Date serialization.
+ */
+function isPlainObject(v: unknown): v is Record<string, unknown> {
+  if (v == null || typeof v !== "object") return false;
+  const proto = Object.getPrototypeOf(v);
+  return proto === null || proto === Object.prototype;
+}
+
+/**
  * Walk an object/array tree and rewrite known media URL fields. Non-matching
  * fields and external URLs are left alone. Used by mobile API routes right
  * before returning JSON.
  */
 export function absolutizeMediaUrls<T>(input: T): T {
-  if (input == null || typeof input !== "object") return input;
   if (Array.isArray(input)) {
     return input.map((item) => absolutizeMediaUrls(item)) as unknown as T;
   }
-  const obj = input as Record<string, unknown>;
+  if (!isPlainObject(input)) return input;
+
   const out: Record<string, unknown> = {};
-  for (const [k, v] of Object.entries(obj)) {
+  for (const [k, v] of Object.entries(input)) {
     if (URL_FIELDS.has(k) && typeof v === "string") {
       out[k] = absolutizeUrl(v);
-    } else if (v && typeof v === "object") {
+    } else if (Array.isArray(v) || isPlainObject(v)) {
       out[k] = absolutizeMediaUrls(v);
     } else {
+      // Date, Buffer, primitives, null, undefined — pass through untouched
       out[k] = v;
     }
   }

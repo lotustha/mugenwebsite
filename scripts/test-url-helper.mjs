@@ -29,13 +29,19 @@ function absolutizeUrl(url) {
   return url;
 }
 
+function isPlainObject(v) {
+  if (v == null || typeof v !== "object") return false;
+  const proto = Object.getPrototypeOf(v);
+  return proto === null || proto === Object.prototype;
+}
+
 function absolutizeMediaUrls(input) {
-  if (input == null || typeof input !== "object") return input;
   if (Array.isArray(input)) return input.map(absolutizeMediaUrls);
+  if (!isPlainObject(input)) return input;
   const out = {};
   for (const [k, v] of Object.entries(input)) {
     if (URL_FIELDS.has(k) && typeof v === "string") out[k] = absolutizeUrl(v);
-    else if (v && typeof v === "object") out[k] = absolutizeMediaUrls(v);
+    else if (Array.isArray(v) || isPlainObject(v)) out[k] = absolutizeMediaUrls(v);
     else out[k] = v;
   }
   return out;
@@ -102,6 +108,16 @@ const cases = [
     name: "null fileUrl preserved",
     in:  { id: "5", fileUrl: null },
     expect: { fileUrl: null },
+  },
+  {
+    name: "Date object passes through unchanged (not flattened to {})",
+    in:  { id: "6", createdAt: new Date("2026-05-10T00:00:00Z") },
+    expect: { createdAt: new Date("2026-05-10T00:00:00Z") },
+  },
+  {
+    name: "Date inside nested array still serializes to ISO via JSON",
+    in:  { items: [{ createdAt: new Date("2026-01-01T12:00:00Z") }] },
+    expect: { items: [{ createdAt: new Date("2026-01-01T12:00:00Z") }] },
   },
 ];
 
