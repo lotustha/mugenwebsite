@@ -48,26 +48,46 @@ export async function resolvePinUrl(raw: string): Promise<string> {
 
 // ─── Search ──────────────────────────────────────────────────────────────────
 
-/**
- * Hits Pinterest's undocumented BaseSearchResource. Returns up to `limit`
- * pin metadata records suitable for rendering a selection grid.
- *
- * Pinterest changes this endpoint occasionally; if it breaks we may need to
- * fall back to scraping /search/pins/?q=... HTML for embedded JSON.
- */
-export async function searchPins(query: string, limit = 25): Promise<PinSearchResult[]> {
-  const trimmed = query.trim();
-  if (!trimmed) return [];
+/** Normalize a raw Pinterest pin/result object into our PinSearchResult shape. */
+function normalisePinRecord(raw: unknown): PinSearchResult | null {
+  if (!raw || typeof raw !== "object") return null;
+  const r = raw as Record<string, unknown>;
+  const id = typeof r.id === "string" ? r.id : null;
+  if (!id) return null;
+  if (r.type && r.type !== "pin") return null;
 
-  const data = {
-    options: {
-      query: trimmed,
-      scope: "pins",
-      page_size: Math.min(Math.max(limit, 1), 50),
-    },
+  const title =
+    (typeof r.grid_title === "string" && r.grid_title) ||
+    (typeof r.title === "string" && r.title) ||
+    (typeof r.description === "string" && r.description.slice(0, 80)) ||
+    "Pinterest Wallpaper";
+
+  const isVideo = !!(r.videos && typeof r.videos === "object");
+
+  const images = r.images as Record<string, { url?: string }> | undefined;
+  const thumbnailUrl =
+    images?.orig?.url ??
+    images?.["736x"]?.url ??
+    images?.["474x"]?.url ??
+    images?.["236x"]?.url ??
+    "";
+  if (!thumbnailUrl) return null;
+
+  return {
+    pinId: id,
+    title: String(title).trim().slice(0, 120),
+    thumbnailUrl,
+    isVideo,
+    pinUrl: `https://www.pinterest.com/pin/${id}/`,
   };
+}
 
-  const sourceUrl = `/search/pins/?q=${encodeURIComponent(trimmed)}`;
+/** Layer 1: undocumented JSON API. Fast but Pinterest 403s without session. */
+async function searchViaApi(query: string, limit: number): Promise<PinSearchResult[]> {
+  const data = {
+    options: { query, scope: "pins", page_size: Math.min(Math.max(limit, 1), 50) },
+  };
+  const sourceUrl = `/search/pins/?q=${encodeURIComponent(query)}`;
   const apiUrl =
     `https://www.pinterest.com/resource/BaseSearchResource/get/` +
     `?source_url=${encodeURIComponent(sourceUrl)}` +
@@ -81,54 +101,167 @@ export async function searchPins(query: string, limit = 25): Promise<PinSearchRe
       "Accept": "application/json, text/javascript, */*; q=0.01",
       "Referer": `https://www.pinterest.com${sourceUrl}`,
     },
-    signal: AbortSignal.timeout(20_000),
+    signal: AbortSignal.timeout(15_000),
   });
-
-  if (!res.ok) {
-    throw new Error(`Pinterest search returned HTTP ${res.status}`);
-  }
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
   const json = await res.json();
   const results: unknown[] = json?.resource_response?.data?.results ?? [];
+  return results.map(normalisePinRecord).filter((r): r is PinSearchResult => r !== null);
+}
+
+/** Layer 2: server-rendered HTML page. Pinterest embeds initial pin data
+ *  in <script id="__PWS_DATA__"> for SEO. We dig for pin records. */
+async function searchViaHtml(query: string, limit: number): Promise<PinSearchResult[]> {
+  const url = `https://www.pinterest.com/search/pins/?q=${encodeURIComponent(query)}&rs=typed`;
+  const res = await fetch(url, {
+    headers: {
+      "User-Agent": UA,
+      "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+      "Accept-Language": "en-US,en;q=0.9",
+      "Sec-Fetch-Dest": "document",
+      "Sec-Fetch-Mode": "navigate",
+      "Sec-Fetch-Site": "none",
+      "Upgrade-Insecure-Requests": "1",
+    },
+    signal: AbortSignal.timeout(20_000),
+  });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const html = await res.text();
 
   const out: PinSearchResult[] = [];
-  for (const raw of results) {
-    const r = raw as Record<string, unknown>;
-    const id = typeof r.id === "string" ? r.id : null;
-    if (!id) continue;
+  const seen = new Set<string>();
 
-    // Pinterest returns mixed types in search; only keep "pin" rows
-    if (r.type && r.type !== "pin") continue;
+  // Walk every embedded JSON blob we can find.
+  const scriptMatches = html.matchAll(
+    /<script[^>]*(?:id="__PWS_DATA__"|type="application\/json")[^>]*>([\s\S]*?)<\/script>/gi
+  );
+  for (const m of scriptMatches) {
+    let data: unknown;
+    try { data = JSON.parse(m[1].trim()); } catch { continue; }
 
-    const title =
-      (typeof r.grid_title === "string" && r.grid_title) ||
-      (typeof r.title === "string" && r.title) ||
-      (typeof r.description === "string" && r.description.slice(0, 80)) ||
-      "Pinterest Wallpaper";
+    // Walk the tree, collecting any object that looks like a pin
+    const stack: unknown[] = [data];
+    while (stack.length && out.length < limit) {
+      const node = stack.pop();
+      if (!node || typeof node !== "object") continue;
+      if (Array.isArray(node)) { stack.push(...node); continue; }
 
-    const isVideo = !!(r.videos && typeof r.videos === "object");
-
-    // Pick the largest preview image we can find
-    const images = r.images as Record<string, { url?: string }> | undefined;
-    const thumbnailUrl =
-      images?.orig?.url ??
-      images?.["736x"]?.url ??
-      images?.["474x"]?.url ??
-      images?.["236x"]?.url ??
-      "";
-
-    if (!thumbnailUrl) continue;
-
-    out.push({
-      pinId: id,
-      title: String(title).trim().slice(0, 120),
-      thumbnailUrl,
-      isVideo,
-      pinUrl: `https://www.pinterest.com/pin/${id}/`,
-    });
+      const o = node as Record<string, unknown>;
+      const id = typeof o.id === "string" ? o.id : null;
+      if (id && !seen.has(id) && (o.images || o.image_signature)) {
+        const norm = normalisePinRecord(o);
+        if (norm) { seen.add(id); out.push(norm); }
+      }
+      for (const v of Object.values(o)) stack.push(v);
+    }
+    if (out.length >= limit) break;
   }
 
-  return out;
+  return out.slice(0, limit);
+}
+
+/** Layer 3: real browser. Slowest, most reliable. Requires Playwright + Chromium. */
+async function searchViaHeadless(query: string, limit: number): Promise<PinSearchResult[]> {
+  let chromium: typeof import("playwright").chromium;
+  try {
+    ({ chromium } = await import("playwright"));
+  } catch {
+    throw new Error("Playwright not installed");
+  }
+
+  let browser: import("playwright").Browser | null = null;
+  try {
+    browser = await chromium.launch({
+      headless: true,
+      args: ["--no-sandbox", "--disable-dev-shm-usage", "--disable-blink-features=AutomationControlled"],
+    });
+    const ctx = await browser.newContext({
+      userAgent: UA,
+      viewport: { width: 1280, height: 1800 },
+      locale: "en-US",
+    });
+    const page = await ctx.newPage();
+
+    const url = `https://www.pinterest.com/search/pins/?q=${encodeURIComponent(query)}&rs=typed`;
+    await page.goto(url, { waitUntil: "domcontentloaded", timeout: 30_000 });
+
+    // Pinterest renders pin tiles with data-test-id="pin"
+    await page.waitForSelector('[data-test-id="pin"], [data-test-id="pinrep-image"], div[data-test-pin-id]', { timeout: 12_000 }).catch(() => {});
+
+    // Scroll a couple of times to load more results
+    for (let i = 0; i < 3 && i * 8 < limit; i++) {
+      await page.evaluate(() => window.scrollBy(0, window.innerHeight * 1.5));
+      await page.waitForTimeout(800);
+    }
+
+    const harvested = await page.evaluate(() => {
+      const out: Array<{ pinId: string; title: string; thumbnailUrl: string; isVideo: boolean }> = [];
+      const tiles = document.querySelectorAll('[data-test-pin-id], a[href^="/pin/"]');
+      const seen = new Set<string>();
+      tiles.forEach((el) => {
+        const node = el as HTMLElement;
+        // Pin id from data attribute or href
+        let id = node.getAttribute("data-test-pin-id");
+        if (!id) {
+          const href = node.getAttribute("href") ?? (node.querySelector('a[href^="/pin/"]')?.getAttribute("href") ?? "");
+          const m = href.match(/\/pin\/(\d+)/);
+          if (m) id = m[1];
+        }
+        if (!id || seen.has(id)) return;
+        const img = (node.querySelector("img") ?? node.closest('[data-test-id="pin"]')?.querySelector("img")) as HTMLImageElement | null;
+        if (!img?.src) return;
+        const isVideo = !!(node.querySelector('video') ?? node.closest('[data-test-id="pin"]')?.querySelector('[data-test-id*="video"], video'));
+        seen.add(id);
+        out.push({
+          pinId: id,
+          title: img.alt?.trim().slice(0, 120) || "Pinterest Wallpaper",
+          thumbnailUrl: img.src,
+          isVideo,
+        });
+      });
+      return out;
+    });
+
+    return harvested.slice(0, limit).map((h) => ({
+      ...h,
+      pinUrl: `https://www.pinterest.com/pin/${h.pinId}/`,
+    }));
+  } finally {
+    if (browser) await browser.close().catch(() => {});
+  }
+}
+
+/**
+ * Three-layer Pinterest search:
+ *   1. Undocumented JSON API   (fast; often 403 without session cookies)
+ *   2. HTML page + __PWS_DATA__ (server-rendered initial state)
+ *   3. Headless Chromium       (slow, needs Playwright)
+ *
+ * Returns the first layer that yields a non-empty result. If all three
+ * fail, the last error is rethrown so callers can show something useful.
+ */
+export async function searchPins(query: string, limit = 25): Promise<PinSearchResult[]> {
+  const trimmed = query.trim();
+  if (!trimmed) return [];
+
+  const errors: string[] = [];
+
+  for (const [name, fn] of [
+    ["api", () => searchViaApi(trimmed, limit)],
+    ["html", () => searchViaHtml(trimmed, limit)],
+    ["headless", () => searchViaHeadless(trimmed, limit)],
+  ] as const) {
+    try {
+      const results = await fn();
+      if (results.length > 0) return results;
+      errors.push(`${name}: 0 results`);
+    } catch (e) {
+      errors.push(`${name}: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  }
+
+  throw new Error(`All search strategies failed — ${errors.join("; ")}`);
 }
 
 // ─── Per-pin video extraction (HTML scrape) ──────────────────────────────────
