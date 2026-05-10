@@ -3,6 +3,11 @@ import Image from "next/image";
 import Link from "next/link";
 import type { Metadata } from "next";
 
+// Read fresh from Prisma on every request — without this, Next.js statically
+// pre-renders this page at build time and admin additions don't appear until
+// the next deploy.
+export const dynamic = "force-dynamic";
+
 export const metadata: Metadata = {
   title: "Our Apps — MugenAnime",
   description: "Download the official MugenAnime app. Stream thousands of anime titles in HD, offline download, sub & dub — free on Android.",

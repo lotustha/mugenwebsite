@@ -3,6 +3,9 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import AppDetailClient from "./AppDetailClient";
 
+// Render on every request so admin edits show without a deploy.
+export const dynamic = "force-dynamic";
+
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 const INCLUDE = {

@@ -5,6 +5,10 @@ import Link from "next/link";
 import AdUnit from "@/components/AdUnit";
 import { prisma } from "@/lib/prisma";
 
+// Render fresh on every request so newly-published or edited posts
+// appear immediately instead of after the next build.
+export const dynamic = "force-dynamic";
+
 interface PageProps {
   params: Promise<{ slug: string }>;
 }

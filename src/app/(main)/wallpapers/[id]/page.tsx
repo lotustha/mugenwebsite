@@ -6,6 +6,10 @@ import { prisma } from "@/lib/prisma";
 import WallpaperVideoPlayer from "./WallpaperVideoPlayer";
 import RelatedWallpapers from "./RelatedWallpapers";
 
+// Render fresh on every request so admin-uploaded wallpapers are
+// visible immediately instead of after the next build.
+export const dynamic = "force-dynamic";
+
 interface PageProps {
   params: Promise<{ id: string }>;
 }
