@@ -1,7 +1,6 @@
 import { promises as fs } from "fs";
 import path from "path";
 import crypto from "crypto";
-import { siteBaseUrl } from "@/lib/url";
 
 const DEFAULT_DIR = path.join(process.cwd(), "uploads");
 
@@ -12,7 +11,12 @@ export function uploadDir(): string {
 export interface SaveResult {
   /** Absolute path on disk where the file was written. */
   path: string;
-  /** Absolute public URL (e.g. https://mugenstream.fun/uploads/folder/file.ext) for the mobile app + browser. */
+  /**
+   * Relative URL ("/uploads/folder/filename.ext"). API endpoints rewrite
+   * this to a fully-qualified URL via absolutizeMediaUrls() so the host
+   * is decided at request time (NEXT_PUBLIC_SITE_URL or, as a last resort,
+   * the request's Host header). Storing relative keeps the DB portable.
+   */
   url: string;
 }
 
@@ -37,6 +41,5 @@ export async function saveBuffer(opts: {
       : Buffer.from(opts.buffer);
   await fs.writeFile(fullPath, data);
 
-  // Save absolute URLs so the mobile app can fetch directly. Browser also fine.
-  return { path: fullPath, url: `${siteBaseUrl()}/uploads/${folder}/${filename}` };
+  return { path: fullPath, url: `/uploads/${folder}/${filename}` };
 }

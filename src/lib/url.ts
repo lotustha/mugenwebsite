@@ -1,14 +1,13 @@
-// Absolute-URL helpers shared by storage saves and API responses.
+// Absolute-URL helpers for media stored under /uploads/.
 //
 // Why this exists: Wallpapers/posts/messages all carry media URLs that the
-// mobile app loads directly. Relative paths like "/uploads/foo.mp4" work in a
-// browser (resolve to current origin) but fail in a Flutter/native app, which
-// has no implicit base URL. So:
-//   - storage.saveBuffer() returns absolute URLs going forward
-//   - API responses run absolutizeMediaUrls() to fix any older relative rows
+// mobile app loads directly. The mobile app has no implicit base URL, so a
+// path like "/uploads/foo.mp4" can't be fetched. We always rewrite at API
+// response time (DB stays portable, host can be changed without a migration).
 //
-// Tweak the env var (NEXT_PUBLIC_SITE_URL) to switch domains; nothing in the
-// DB needs to change because absolutization happens at request time.
+// We also clean up rows that may have been written with the wrong host
+// baked in (e.g. http://localhost:3000/uploads/...) — those get rewritten
+// to the configured public host too.
 
 const URL_FIELDS = new Set([
   "fileUrl",
@@ -22,6 +21,9 @@ const URL_FIELDS = new Set([
   "url",
 ]);
 
+/** Hosts that are obviously not the public origin and should be rewritten if they show up in a stored URL. */
+const BAD_HOST_PATTERN = /^https?:\/\/(localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1\])(:\d+)?(?=\/)/i;
+
 /** Public-facing site origin, no trailing slash. */
 export function siteBaseUrl(): string {
   const candidate =
@@ -31,24 +33,33 @@ export function siteBaseUrl(): string {
   return candidate.replace(/\/+$/, "");
 }
 
-/** If `url` is a relative /uploads path, prepend the site origin. Otherwise return unchanged. */
+/**
+ * Rewrite a single URL string:
+ *   - "/uploads/foo.jpg"                      → SITE/uploads/foo.jpg
+ *   - "http://localhost:3000/uploads/foo.jpg" → SITE/uploads/foo.jpg
+ *   - anything else                           → unchanged
+ */
 export function absolutizeUrl(url: string | null | undefined): string | null | undefined {
   if (!url) return url;
   if (url.startsWith("/uploads/")) return `${siteBaseUrl()}${url}`;
+  // Strip a wrong host prefix from previously-stored absolute URLs and re-prepend the right one.
+  const stripped = url.replace(BAD_HOST_PATTERN, "");
+  if (stripped !== url && stripped.startsWith("/uploads/")) {
+    return `${siteBaseUrl()}${stripped}`;
+  }
   return url;
 }
 
 /**
  * Walk an object/array tree and rewrite known media URL fields. Non-matching
- * fields and external URLs (https://…) are left alone. Used by mobile API
- * routes right before returning JSON.
+ * fields and external URLs are left alone. Used by mobile API routes right
+ * before returning JSON.
  */
 export function absolutizeMediaUrls<T>(input: T): T {
   if (input == null || typeof input !== "object") return input;
   if (Array.isArray(input)) {
     return input.map((item) => absolutizeMediaUrls(item)) as unknown as T;
   }
-  // Plain objects: shallow-clone with rewrites; recurse into nested objects/arrays.
   const obj = input as Record<string, unknown>;
   const out: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(obj)) {

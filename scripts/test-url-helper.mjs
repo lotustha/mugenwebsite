@@ -17,9 +17,15 @@ function siteBaseUrl() {
   ).replace(/\/+$/, "");
 }
 
+const BAD_HOST_PATTERN = /^https?:\/\/(localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1\])(:\d+)?(?=\/)/i;
+
 function absolutizeUrl(url) {
   if (!url) return url;
   if (url.startsWith("/uploads/")) return `${siteBaseUrl()}${url}`;
+  const stripped = url.replace(BAD_HOST_PATTERN, "");
+  if (stripped !== url && stripped.startsWith("/uploads/")) {
+    return `${siteBaseUrl()}${stripped}`;
+  }
   return url;
 }
 
@@ -76,6 +82,21 @@ const cases = [
     name: "external URL not starting with /uploads/ left alone",
     in:  { iconUrl: "https://cdn.example.com/icon.png" },
     expect: { iconUrl: "https://cdn.example.com/icon.png" },
+  },
+  {
+    name: "localhost-prefixed URL is rewritten to public host",
+    in:  { fileUrl: "http://localhost:3000/uploads/pinterest/abc.mp4" },
+    expect: { fileUrl: "https://mugenstream.fun/uploads/pinterest/abc.mp4" },
+  },
+  {
+    name: "127.0.0.1-prefixed URL is rewritten too",
+    in:  { fileUrl: "http://127.0.0.1:3000/uploads/foo.jpg" },
+    expect: { fileUrl: "https://mugenstream.fun/uploads/foo.jpg" },
+  },
+  {
+    name: "localhost URL NOT pointing at /uploads/ is left alone",
+    in:  { iconUrl: "http://localhost:3000/api/something" },
+    expect: { iconUrl: "http://localhost:3000/api/something" },
   },
   {
     name: "null fileUrl preserved",
