@@ -32,11 +32,22 @@ export async function POST(request: Request) {
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   try {
-    const { name, url, scheduleMinutes = 60, isActive = true, autoPublish = false } = await request.json();
+    const {
+      name, url,
+      sourceType = "RSS",
+      maxItems = 3,
+      scheduleMinutes = 60,
+      isActive = true,
+      autoPublish = false,
+    } = await request.json();
     if (!name || !url) return NextResponse.json({ error: "name and url are required" }, { status: 400 });
 
     const feed = await prisma.rssFeed.create({
-      data: { name, url, scheduleMinutes, isActive, autoPublish },
+      data: {
+        name, url, scheduleMinutes, isActive, autoPublish,
+        sourceType: sourceType === "AI_SCRAPE" ? "AI_SCRAPE" : "RSS",
+        maxItems: Math.min(Math.max(1, Number(maxItems) || 3), 10),
+      },
     });
     return NextResponse.json(feed, { status: 201 });
   } catch (e: unknown) {

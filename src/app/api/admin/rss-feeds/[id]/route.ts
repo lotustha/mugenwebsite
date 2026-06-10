@@ -35,6 +35,12 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       data: {
         ...(body.name !== undefined && { name: body.name }),
         ...(body.url !== undefined && { url: body.url }),
+        ...(body.sourceType !== undefined && {
+          sourceType: body.sourceType === "AI_SCRAPE" ? "AI_SCRAPE" : "RSS",
+        }),
+        ...(body.maxItems !== undefined && {
+          maxItems: Math.min(Math.max(1, Number(body.maxItems) || 3), 10),
+        }),
         ...(body.scheduleMinutes !== undefined && { scheduleMinutes: body.scheduleMinutes }),
         ...(body.isActive !== undefined && { isActive: body.isActive }),
         ...(body.autoPublish !== undefined && { autoPublish: body.autoPublish }),

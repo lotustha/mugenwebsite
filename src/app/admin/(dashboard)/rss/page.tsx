@@ -31,6 +31,8 @@ interface Log {
 }
 interface Feed {
   id: string; name: string; url: string;
+  sourceType?: "RSS" | "AI_SCRAPE";
+  maxItems?: number;
   scheduleMinutes: number; isActive: boolean; autoPublish: boolean;
   lastRunAt: string | null;
   _count: { logs: number };
@@ -360,6 +362,11 @@ function FeedCard({
                   Auto-publish
                 </span>
               )}
+              {feed.sourceType === "AI_SCRAPE" && (
+                <span className="px-2 py-0.5 rounded-full font-body text-[10px] font-semibold bg-fuchsia-500/15 text-fuchsia-300 border border-fuchsia-500/25">
+                  AI Scrape · {feed.maxItems ?? 3}/run
+                </span>
+              )}
               {running && (
                 <span className="px-2 py-0.5 rounded-full font-body text-[10px] font-semibold animate-pulse bg-violet-500/20 text-violet-300 border border-violet-500/30">
                   Running…
@@ -496,11 +503,13 @@ function FeedCard({
 // ─── Add/Edit modal ───────────────────────────────────────────────────────────
 function FeedModal({ initial, onSave, onClose }: {
   initial?: Feed;
-  onSave: (d: { name: string; url: string; scheduleMinutes: number; isActive: boolean; autoPublish: boolean }) => Promise<void>;
+  onSave: (d: { name: string; url: string; sourceType: "RSS" | "AI_SCRAPE"; maxItems: number; scheduleMinutes: number; isActive: boolean; autoPublish: boolean }) => Promise<void>;
   onClose: () => void;
 }) {
   const [name, setName]             = useState(initial?.name ?? "Anime News Network");
   const [url, setUrl]               = useState(initial?.url ?? "https://www.animenewsnetwork.com/all-reviews/rss.xml?ann-edition=w");
+  const [sourceType, setSourceType] = useState<"RSS" | "AI_SCRAPE">(initial?.sourceType ?? "RSS");
+  const [maxItems, setMaxItems]     = useState(initial?.maxItems ?? 3);
   const [schedule, setSchedule]     = useState(initial?.scheduleMinutes ?? 60);
   const [isActive, setIsActive]     = useState(initial?.isActive ?? true);
   const [autoPublish, setAutoPublish] = useState(initial?.autoPublish ?? false);
@@ -508,7 +517,7 @@ function FeedModal({ initial, onSave, onClose }: {
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault(); setSaving(true);
-    await onSave({ name, url, scheduleMinutes: schedule, isActive, autoPublish });
+    await onSave({ name, url, sourceType, maxItems, scheduleMinutes: schedule, isActive, autoPublish });
     setSaving(false);
   };
 
@@ -533,9 +542,30 @@ function FeedModal({ initial, onSave, onClose }: {
           </button>
         </div>
         <form onSubmit={submit} className="space-y-4">
+          {/* Source type selector */}
+          <div>
+            <label className="block font-body text-[11px] uppercase tracking-widest text-white/40 mb-1.5">Source Type</label>
+            <div className="grid grid-cols-2 gap-2">
+              {[
+                { v: "RSS"       as const, label: "RSS / Atom",  hint: "Standard XML feed URL" },
+                { v: "AI_SCRAPE" as const, label: "AI Scrape",   hint: "Any webpage — AI extracts articles" },
+              ].map(opt => (
+                <button key={opt.v} type="button" onClick={() => setSourceType(opt.v)}
+                  className="text-left px-3 py-2 rounded-lg cursor-pointer transition-all"
+                  style={{
+                    background: sourceType === opt.v ? "rgba(124,58,237,0.18)" : "rgba(6,14,32,0.5)",
+                    border:     sourceType === opt.v ? "1px solid rgba(167,139,250,0.45)" : "1px solid rgba(255,255,255,0.08)",
+                  }}>
+                  <p className="font-headline text-sm font-semibold" style={{ color: sourceType === opt.v ? "#c4b5fd" : "rgba(255,255,255,0.7)" }}>{opt.label}</p>
+                  <p className="font-body text-[10px] mt-0.5" style={{ color: "rgba(255,255,255,0.35)" }}>{opt.hint}</p>
+                </button>
+              ))}
+            </div>
+          </div>
+
           {[
             { label: "Feed Name", value: name, set: setName, type: "text", mono: false },
-            { label: "RSS URL",   value: url,  set: setUrl,  type: "url",  mono: true  },
+            { label: sourceType === "AI_SCRAPE" ? "Page URL" : "RSS URL", value: url, set: setUrl, type: "url", mono: true },
           ].map(f => (
             <div key={f.label}>
               <label className="block font-body text-[11px] uppercase tracking-widest text-white/40 mb-1.5">{f.label}</label>
@@ -544,6 +574,20 @@ function FeedModal({ initial, onSave, onClose }: {
                 style={{ background: "rgba(6,14,32,0.7)", border: "1px solid rgba(255,255,255,0.08)" }} />
             </div>
           ))}
+
+          {sourceType === "AI_SCRAPE" && (
+            <div>
+              <label className="block font-body text-[11px] uppercase tracking-widest text-white/40 mb-1.5">Articles per run</label>
+              <input type="number" min={1} max={10} value={maxItems}
+                onChange={e => setMaxItems(Math.min(10, Math.max(1, Number(e.target.value) || 1)))}
+                className="w-full px-3.5 py-2.5 rounded-lg font-body text-sm text-white/80 outline-none"
+                style={{ background: "rgba(6,14,32,0.7)", border: "1px solid rgba(255,255,255,0.08)" }} />
+              <p className="font-body text-[10px] mt-1" style={{ color: "rgba(255,255,255,0.3)" }}>
+                AI will extract up to this many latest articles each run (1-10).
+              </p>
+            </div>
+          )}
+
           <div>
             <label className="block font-body text-[11px] uppercase tracking-widest text-white/40 mb-1.5">Schedule</label>
             <select value={schedule} onChange={e => setSchedule(Number(e.target.value))}

@@ -44,73 +44,13 @@ interface AiResult {
   };
 }
 
-// ─── XML helpers ─────────────────────────────────────────────────────────────
-function extractText(xml: string, tag: string): string {
-  // handles <tag>val</tag> and <tag><![CDATA[val]]></tag>
-  const re = new RegExp(`<${tag}[^>]*>(?:<!\\[CDATA\\[)?([\\s\\S]*?)(?:\\]\\]>)?<\\/${tag}>`, "i");
-  const m = xml.match(re);
-  return m ? m[1].trim() : "";
-}
-
-function stripHtml(html: string): string {
-  return html
-    .replace(/<script[\s\S]*?<\/script>/gi, "")
-    .replace(/<style[\s\S]*?<\/style>/gi, "")
-    .replace(/<[^>]+>/g, " ")
-    .replace(/&amp;/g, "&")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/&nbsp;/g, " ")
-    .replace(/\s{2,}/g, " ")
-    .trim();
-}
-
+// ─── HTML image extraction (used for fallback featured-image discovery) ──────
 function extractImagesFromHtml(html: string): string[] {
   const urls: string[] = [];
   const re = /<img[^>]+src="([^"]+)"/gi;
   let m;
   while ((m = re.exec(html)) !== null) urls.push(m[1]);
-  // also check enclosure / media:content
-  const encRe = /<enclosure[^>]+url="([^"]+)"/gi;
-  while ((m = encRe.exec(html)) !== null) urls.push(m[1]);
-  const mediaRe = /<media:content[^>]+url="([^"]+)"/gi;
-  while ((m = mediaRe.exec(html)) !== null) urls.push(m[1]);
-  const mediaThumbnail = /<media:thumbnail[^>]+url="([^"]+)"/gi;
-  while ((m = mediaThumbnail.exec(html)) !== null) urls.push(m[1]);
   return [...new Set(urls)];
-}
-
-export function parseRssXml(xml: string): RssItem[] {
-  const items: RssItem[] = [];
-  // Split on <item> tags
-  const itemMatches = xml.match(/<item>([\s\S]*?)<\/item>/gi) ?? [];
-  for (const raw of itemMatches) {
-    const title = stripHtml(extractText(raw, "title"));
-    const link = extractText(raw, "link") || extractText(raw, "guid");
-    const guid = extractText(raw, "guid") || link;
-    const description = extractText(raw, "description");
-    // content:encoded fallback
-    const contentRaw = raw.match(/<content:encoded[^>]*>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?<\/content:encoded>/i)?.[1] ?? description;
-    const pubDate = extractText(raw, "pubDate");
-    const category = extractText(raw, "category");
-
-    const allHtml = description + " " + contentRaw + " " + raw;
-    const images = extractImagesFromHtml(allHtml);
-
-    items.push({
-      guid: guid || link,
-      title,
-      link,
-      description: stripHtml(description),
-      content: stripHtml(contentRaw),
-      pubDate,
-      imageUrl: images[0],
-      category,
-    });
-  }
-  return items;
 }
 
 // ─── Image download → local storage ──────────────────────────────────────────
@@ -141,7 +81,7 @@ export async function downloadAndStoreImage(imageUrl: string): Promise<string | 
 }
 
 // ─── AI call ─────────────────────────────────────────────────────────────────
-interface AiSettings {
+export interface AiSettings {
   provider: string;
   apiKey: string;
   model?: string;
@@ -176,7 +116,7 @@ Return ONLY valid JSON (no markdown, no explanation):
 }
 `.trim();
 
-async function callAi(settings: AiSettings, prompt: string): Promise<string> {
+export async function callAi(settings: AiSettings, prompt: string): Promise<string> {
   const { provider, apiKey, model } = settings;
 
   if (provider === "openrouter") {
@@ -558,17 +498,14 @@ export async function processFeedsWithAi(opts: ProcessFeedOptions): Promise<Proc
       processed: 0, created: 0, skipped: 0, errors: 0, details: [],
     };
 
-    // Fetch RSS
+    // Fetch items via AI scraper (RSS path was removed — every feed is now an AI scrape)
     let items: RssItem[] = [];
     try {
-      const rssRes = await fetch(feed.url, {
-        headers: { "User-Agent": "MugenAnime-Bot/1.0" },
-        signal: AbortSignal.timeout(20_000),
-        next: { revalidate: 0 },
-      });
-      if (!rssRes.ok) throw new Error(`HTTP ${rssRes.status}`);
-      const xml = await rssRes.text();
-      items = parseRssXml(xml);
+      const { scrapeWithAi } = await import("./ai-scraper");
+      items = await scrapeWithAi(
+        { url: feed.url, maxItems: (feed as { maxItems?: number }).maxItems ?? 3 },
+        opts.aiSettings,
+      );
     } catch (e) {
       result.errors++;
       result.details.push({ guid: "__fetch__", status: "error", error: String(e) });

@@ -177,6 +177,8 @@ model RssFeed {
   id              String         @id @default(uuid()) @db.Uuid
   name            String
   url             String
+  sourceType      RssSourceType  @default(RSS) @map("source_type")
+  maxItems        Int            @default(3)  @map("max_items")          // AI_SCRAPE only — how many articles per run
   scheduleMinutes Int            @default(60)  @map("schedule_minutes") // 30 | 60 | 1440 | etc.
   isActive        Boolean        @default(true) @map("is_active")
   autoPublish     Boolean        @default(false) @map("auto_publish")
@@ -186,6 +188,11 @@ model RssFeed {
   logs            RssImportLog[]
 
   @@map("rss_feeds")
+}
+
+enum RssSourceType {
+  RSS         // Standard RSS/Atom XML feed
+  AI_SCRAPE   // Plain webpage URL; AI extracts article list + per-article content
 }
 
 model RssImportLog {
