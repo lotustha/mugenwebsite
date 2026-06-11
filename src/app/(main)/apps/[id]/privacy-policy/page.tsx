@@ -4,6 +4,8 @@ import Image from "next/image";
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 
+export const dynamic = "force-dynamic";
+
 const purple  = "#8B5CF6";
 const magenta = "#D946EF";
 const surf    = "rgba(9,19,40,0.55)";

@@ -4,6 +4,8 @@ import HomeAnimeSection from "./HomeAnimeSection";
 import HomeAppsSection from "./HomeAppsSection";
 import Link from "next/link";
 
+export const dynamic = "force-dynamic";
+
 const APP_FEATURES = [
   {
     icon: (
