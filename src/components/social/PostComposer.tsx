@@ -37,6 +37,12 @@ export default function PostComposer({
   const [submitting, setSubmitting] = useState(false);
   const [dragging, setDragging] = useState(false);
 
+  // Anime tag autocomplete (real titles from the anime API).
+  const [animeResults, setAnimeResults] = useState<{ id: string; title: string; image?: string }[]>([]);
+  const [animeOpen, setAnimeOpen] = useState(false);
+  const [animeSearching, setAnimeSearching] = useState(false);
+  const animeSkipRef = useRef(false); // suppress the search fired by selecting a suggestion
+
   const inputRef = useRef<HTMLInputElement | null>(null);
 
   const clearPreview = useCallback(() => {
@@ -52,6 +58,8 @@ export default function PostComposer({
     setKind(null);
     setCaption("");
     setAnimeTag("");
+    setAnimeResults([]);
+    setAnimeOpen(false);
     setError(null);
     setSubmitting(false);
     setDragging(false);
@@ -88,6 +96,58 @@ export default function PostComposer({
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, submitting]);
+
+  // Debounced anime-title search against the anime API for the tag field.
+  useEffect(() => {
+    if (animeSkipRef.current) {
+      animeSkipRef.current = false;
+      return;
+    }
+    const q = animeTag.trim();
+    if (q.length < 2) {
+      setAnimeResults([]);
+      setAnimeOpen(false);
+      return;
+    }
+    let cancelled = false;
+    setAnimeSearching(true);
+    const t = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/anime/search?query=${encodeURIComponent(q)}`);
+        const data = await res.json();
+        if (cancelled) return;
+        // API returns { results: [...] }; tolerate a bare array or { data: [...] } too.
+        const raw = Array.isArray(data) ? data : data?.results ?? data?.data ?? [];
+        const list = Array.isArray(raw) ? raw : [];
+        setAnimeResults(
+          list
+            .slice(0, 6)
+            .map((a: { id?: unknown; title?: unknown; image?: unknown }) => ({
+              id: String(a.id ?? ""),
+              title: String(a.title ?? ""),
+              image: typeof a.image === "string" ? a.image : undefined,
+            }))
+            .filter((a) => a.title),
+        );
+        setAnimeOpen(true);
+      } catch {
+        if (!cancelled) setAnimeResults([]);
+      } finally {
+        if (!cancelled) setAnimeSearching(false);
+      }
+    }, 300);
+    return () => {
+      cancelled = true;
+      clearTimeout(t);
+    };
+  }, [animeTag]);
+
+  function selectAnime(title: string) {
+    animeSkipRef.current = true; // don't immediately re-search the value we just set
+    setAnimeTag(title.slice(0, 80));
+    setAnimeResults([]);
+    setAnimeOpen(false);
+  }
 
   function handleClose() {
     if (submitting) return;
@@ -276,16 +336,49 @@ export default function PostComposer({
                 </div>
               </div>
 
-              {/* Anime tag */}
-              <div className="relative">
-                <span className="text-brand pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-sm font-medium">#</span>
-                <input
-                  type="text"
-                  value={animeTag}
-                  onChange={(e) => setAnimeTag(e.target.value)}
-                  placeholder="Tag an anime… e.g. Jujutsu Kaisen"
-                  className="w-full rounded-xl border border-outline-variant bg-surface-low py-3 pl-8 pr-4 text-[15px] text-text-main placeholder:text-text-main/40 focus:border-primary focus:outline-none"
-                />
+              {/* Anime tag — autocomplete from the anime API */}
+              <div>
+                <div className="relative">
+                  <span className="text-brand pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-sm font-medium">#</span>
+                  <input
+                    type="text"
+                    value={animeTag}
+                    onChange={(e) => setAnimeTag(e.target.value.slice(0, 80))}
+                    onFocus={() => animeResults.length > 0 && setAnimeOpen(true)}
+                    autoComplete="off"
+                    placeholder="Tag an anime… e.g. Jujutsu Kaisen"
+                    className="w-full rounded-xl border border-outline-variant bg-surface-low py-3 pl-8 pr-10 text-[15px] text-text-main placeholder:text-text-main/40 focus:border-primary focus:outline-none"
+                  />
+                  {animeSearching && (
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin rounded-full border-2 border-primary/30 border-t-primary" />
+                  )}
+                </div>
+
+                {animeOpen && animeResults.length > 0 && (
+                  <ul className="mt-2 overflow-hidden rounded-xl border border-outline-variant bg-surface-low">
+                    {animeResults.map((a) => (
+                      <li key={a.id || a.title}>
+                        <button
+                          type="button"
+                          onClick={() => selectAnime(a.title)}
+                          className="flex w-full items-center gap-3 px-3 py-2 text-left transition-colors hover:bg-white/5"
+                        >
+                          <span className="relative h-12 w-9 flex-none overflow-hidden rounded bg-surface">
+                            {a.image && (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img src={a.image} alt="" className="h-full w-full object-cover" loading="lazy" />
+                            )}
+                          </span>
+                          <span className="truncate text-sm text-text-main">{a.title}</span>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+
+                {animeOpen && !animeSearching && animeResults.length === 0 && animeTag.trim().length >= 2 && (
+                  <p className="mt-2 px-1 text-xs text-text-main/40">No anime found — you can still post this tag as-is.</p>
+                )}
               </div>
 
               {error && (

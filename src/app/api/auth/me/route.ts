@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getSessionUser } from "@/lib/auth-helpers";
+import { generateUniqueUsername } from "@/lib/ensure-username";
 import { isValidUsername } from "@/lib/username";
 import { withAbsoluteMedia } from "@/lib/social-serialize";
 
@@ -18,6 +19,18 @@ export async function GET(req: Request) {
       _count: { select: { followers: true, following: true, socialPosts: true } },
     },
   });
+  // OAuth users are created without a username (PrismaAdapter) → assign one so
+  // profile links never resolve to /u/null. Idempotent: only runs while null.
+  if (user && !user.username) {
+    try {
+      const username = await generateUniqueUsername(user.email);
+      await prisma.user.update({ where: { id: user.id }, data: { username } });
+      user.username = username;
+    } catch {
+      const fresh = await prisma.user.findUnique({ where: { id: user.id }, select: { username: true } });
+      if (fresh?.username) user.username = fresh.username;
+    }
+  }
   return NextResponse.json(withAbsoluteMedia({ user }));
 }
 

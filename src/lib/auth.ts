@@ -4,6 +4,7 @@ import Google from "next-auth/providers/google";
 import { PrismaAdapter } from "@auth/prisma-adapter";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
+import { generateUniqueUsername } from "@/lib/ensure-username";
 import { authConfig } from "./auth.config";
 
 /**
@@ -31,14 +32,30 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         if (role) token.role = role;
       }
       // Backfill role/username from DB when missing (Google sign-in) or on update.
-      if (token.id && (!token.role || token.username === undefined || trigger === "update")) {
+      if (token.id && (!token.role || token.username === undefined || token.username === null || trigger === "update")) {
         const dbUser = await prisma.user.findUnique({
           where: { id: token.id as string },
-          select: { role: true, username: true },
+          select: { role: true, username: true, email: true },
         });
         if (dbUser) {
           token.role = dbUser.role;
-          token.username = dbUser.username ?? null;
+          let username = dbUser.username;
+          // OAuth users are created by PrismaAdapter without a username → assign one
+          // so profile links (/u/[username]) never resolve to /u/null.
+          if (!username) {
+            try {
+              username = await generateUniqueUsername(dbUser.email);
+              await prisma.user.update({ where: { id: token.id as string }, data: { username } });
+            } catch {
+              // Unique race: another request set it first — re-read.
+              const fresh = await prisma.user.findUnique({
+                where: { id: token.id as string },
+                select: { username: true },
+              });
+              username = fresh?.username ?? null;
+            }
+          }
+          token.username = username;
         }
       }
       return token;
