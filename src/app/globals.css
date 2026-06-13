@@ -112,6 +112,47 @@ body {
     background-clip: text;
   }
 
+  /* ─── Brand gradient (the canonical #8B5CF6 → #D946EF used on all primary
+     CTAs, follow/like/post buttons across the social surface) ─────────────── */
+  .bg-brand {
+    background-image: linear-gradient(135deg, #8b5cf6, #d946ef);
+  }
+
+  .bg-brand-soft {
+    background-image: linear-gradient(135deg, rgba(139, 92, 246, 0.16), rgba(217, 70, 239, 0.16));
+  }
+
+  .text-brand {
+    background: linear-gradient(135deg, #8b5cf6 0%, #d946ef 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .border-brand {
+    border-color: rgba(139, 92, 246, 0.5);
+  }
+
+  .ring-brand {
+    box-shadow: 0 0 0 1px rgba(139, 92, 246, 0.4), 0 0 24px rgba(217, 70, 239, 0.18);
+  }
+
+  /* Vertical reels viewport: snap each video to the screen. */
+  .reel-snap {
+    scroll-snap-type: y mandatory;
+    -webkit-overflow-scrolling: touch;
+  }
+  .reel-snap > * {
+    scroll-snap-align: start;
+    scroll-snap-stop: always;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .reel-snap {
+      scroll-behavior: auto;
+    }
+  }
+
   /* Rich article body typography */
   .article-body {
     color: rgba(222, 229, 255, 0.82);

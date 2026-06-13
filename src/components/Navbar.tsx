@@ -3,11 +3,16 @@
 import Link from "next/link";
 import { useState, useEffect, useRef } from "react";
 import { usePathname } from "next/navigation";
+import NotificationBell from "@/components/social/NotificationBell";
+import AccountMenu from "@/components/social/AccountMenu";
 
 const NAV_LINKS = [
   { href: "/",           label: "Home"       },
   { href: "/anime",      label: "Anime"      },
   { href: "/wallpapers", label: "Wallpapers" },
+  { href: "/social",     label: "Feed"       },
+  { href: "/reels",      label: "Reels"      },
+  { href: "/discuss",    label: "Discuss"    },
   { href: "/news",       label: "News"       },
   { href: "/apps",       label: "Apps"       },
 ];
@@ -144,6 +149,12 @@ export default function Navbar() {
                   Get App
                 </Link>
 
+                {/* Social controls */}
+                <div className="hidden md:flex items-center gap-1">
+                  <NotificationBell />
+                  <AccountMenu />
+                </div>
+
                 {/* Mobile hamburger */}
                 <button
                   onClick={() => setIsOpen(o => !o)}
@@ -203,6 +214,11 @@ export default function Navbar() {
                 </Link>
               );
             })}
+
+            <div className="flex items-center justify-between px-1 pt-1">
+              <AccountMenu />
+              <NotificationBell />
+            </div>
 
             <div className="pt-1 pb-0.5">
               <Link href="/apps" onClick={() => setIsOpen(false)}

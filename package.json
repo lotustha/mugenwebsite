@@ -11,6 +11,8 @@
     "seed-news-sources": "node scripts/seed-news-sources.mjs"
   },
   "dependencies": {
+    "@auth/core": "^0.41.2",
+    "@auth/prisma-adapter": "^2.11.2",
     "@prisma/adapter-pg": "^7.8.0",
     "@prisma/client": "^7.8.0",
     "@tiptap/extension-color": "^3.22.5",

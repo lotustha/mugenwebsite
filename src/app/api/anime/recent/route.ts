@@ -1,7 +1,10 @@
 import { NextResponse } from "next/server";
 import { fetchWithTimeout } from "@/lib/fetcher";
 
-export const revalidate = 3600;
+// Never prerender at build time — an empty/failed build-time fetch would be
+// cached as the route's static response. The fetch below still caches upstream
+// data for 1h via next.revalidate.
+export const dynamic = "force-dynamic";
 
 export async function GET() {
   try {

@@ -19,6 +19,10 @@ const URL_FIELDS = new Set([
   "videoUrl",
   "thumbnailUrl",
   "url",
+  // Social surface media fields (consumed directly by the mobile app)
+  "mediaUrl",
+  "posterUrl",
+  "avatar",
 ]);
 
 /** Hosts that are obviously not the public origin and should be rewritten if they show up in a stored URL. */

@@ -65,13 +65,33 @@ model AppFaq {
 }
 
 model User {
-  id         String      @id @default(uuid()) @db.Uuid
-  email      String      @unique
-  password   String?
-  role       Role        @default(USER)
-  posts      Post[]
-  wallpapers Wallpaper[]
-  createdAt  DateTime    @default(now()) @map("created_at")
+  id          String      @id @default(uuid()) @db.Uuid
+  email       String      @unique
+  password    String?
+  role        Role        @default(USER)
+  // ─── Public social profile (nullable; backfilled on first social visit) ───
+  username    String?     @unique                 // public handle for /u/[username]
+  displayName String?     @map("display_name")
+  avatar      String?                             // absolute or /uploads/* URL
+  bio         String?     @db.Text
+  posts       Post[]
+  wallpapers  Wallpaper[]
+  createdAt   DateTime    @default(now()) @map("created_at")
+
+  // ─── Auth.js (Google OAuth via PrismaAdapter; session strategy stays JWT) ──
+  accounts    Account[]
+  sessions    Session[]   // unused at runtime (JWT strategy); kept for adapter compat
+
+  // ─── Social graph ─────────────────────────────────────────────────────────
+  socialPosts      SocialPost[]
+  comments         Comment[]
+  likes            Like[]
+  following        Follow[]          @relation("follower")  // rows where I am the follower
+  followers        Follow[]          @relation("following") // rows where I am followed
+  discussions      Discussion[]
+  discussionReplies DiscussionReply[]
+  notifications    Notification[]    @relation("recipient") // notifications I receive
+  actorNotifications Notification[]  @relation("actor")     // notifications I triggered
 
   @@map("users")
 }
@@ -270,5 +290,189 @@ model FcmToken {
   updatedAt DateTime @updatedAt @map("updated_at")
 
   @@map("fcm_tokens")
+}
+
+// ─── Auth.js OAuth adapter tables ────────────────────────────────────────────
+// PrismaAdapter persists Google sign-ins into the User table. Session strategy
+// stays "jwt" (Credentials provider requires it), so the Session model below is
+// kept only for adapter type-compatibility and is unused at runtime.
+
+model Account {
+  id                String  @id @default(uuid()) @db.Uuid
+  userId            String  @map("user_id") @db.Uuid
+  type              String
+  provider          String
+  providerAccountId String  @map("provider_account_id")
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@map("accounts")
+}
+
+model Session {
+  id           String   @id @default(uuid()) @db.Uuid
+  sessionToken String   @unique @map("session_token")
+  userId       String   @map("user_id") @db.Uuid
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+  @@map("verification_tokens")
+}
+
+// ─── MugenSocial: posts, reels, comments, likes, follow, discussions, notifs ──
+
+enum SocialPostType {
+  IMAGE
+  VIDEO
+  REEL    // short-form vertical video
+}
+
+enum SocialPostStatus {
+  PROCESSING // media uploaded, ffmpeg transcode in progress
+  READY
+  FAILED
+}
+
+model SocialPost {
+  id          String           @id @default(uuid()) @db.Uuid
+  authorId    String           @map("author_id") @db.Uuid
+  author      User             @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  type        SocialPostType
+  status      SocialPostStatus @default(READY) // IMAGE posts ready immediately; video starts PROCESSING
+  caption     String?          @db.Text
+  mediaUrl    String?          @map("media_url")   // image or transcoded video (relative /uploads/*)
+  posterUrl   String?          @map("poster_url")  // video thumbnail from ffmpeg
+  durationSec Int?             @map("duration_sec")
+  width       Int?
+  height      Int?
+  animeTag    String?          @map("anime_tag")   // free-text anime/manga title tag
+  // Internal repost (share). A repost points at the original post.
+  repostOfId  String?          @map("repost_of_id") @db.Uuid
+  repostOf    SocialPost?      @relation("reposts", fields: [repostOfId], references: [id], onDelete: SetNull)
+  reposts     SocialPost[]     @relation("reposts")
+  likesCount  Int              @default(0) @map("likes_count")
+  commentsCount Int            @default(0) @map("comments_count")
+  createdAt   DateTime         @default(now()) @map("created_at")
+  updatedAt   DateTime         @updatedAt @map("updated_at")
+  comments    Comment[]
+  likes       Like[]
+
+  @@index([authorId, createdAt])
+  @@index([type, status, createdAt])
+  @@map("social_posts")
+}
+
+model Comment {
+  id        String     @id @default(uuid()) @db.Uuid
+  postId    String     @map("post_id") @db.Uuid
+  post      SocialPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  authorId  String     @map("author_id") @db.Uuid
+  author    User       @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  content   String     @db.Text
+  parentId  String?    @map("parent_id") @db.Uuid  // threaded replies
+  parent    Comment?   @relation("commentThread", fields: [parentId], references: [id], onDelete: Cascade)
+  replies   Comment[]  @relation("commentThread")
+  createdAt DateTime   @default(now()) @map("created_at")
+
+  @@index([postId, createdAt])
+  @@map("comments")
+}
+
+model Like {
+  id        String     @id @default(uuid()) @db.Uuid
+  postId    String     @map("post_id") @db.Uuid
+  post      SocialPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  userId    String     @map("user_id") @db.Uuid
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime   @default(now()) @map("created_at")
+
+  @@unique([postId, userId])
+  @@map("likes")
+}
+
+model Follow {
+  id          String   @id @default(uuid()) @db.Uuid
+  followerId  String   @map("follower_id") @db.Uuid
+  follower    User     @relation("follower", fields: [followerId], references: [id], onDelete: Cascade)
+  followingId String   @map("following_id") @db.Uuid
+  following   User     @relation("following", fields: [followingId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@unique([followerId, followingId])
+  @@index([followingId])
+  @@map("follows")
+}
+
+model Discussion {
+  id           String            @id @default(uuid()) @db.Uuid
+  title        String
+  content      String            @db.Text
+  authorId     String            @map("author_id") @db.Uuid
+  author       User              @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  animeTag     String?           @map("anime_tag")
+  replyCount   Int               @default(0) @map("reply_count")
+  lastActiveAt DateTime          @default(now()) @map("last_active_at")
+  createdAt    DateTime          @default(now()) @map("created_at")
+  replies      DiscussionReply[]
+
+  @@index([lastActiveAt])
+  @@index([animeTag, lastActiveAt])
+  @@map("discussions")
+}
+
+model DiscussionReply {
+  id           String           @id @default(uuid()) @db.Uuid
+  discussionId String           @map("discussion_id") @db.Uuid
+  discussion   Discussion       @relation(fields: [discussionId], references: [id], onDelete: Cascade)
+  authorId     String           @map("author_id") @db.Uuid
+  author       User             @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  content      String           @db.Text
+  parentId     String?          @map("parent_id") @db.Uuid // nested replies
+  parent       DiscussionReply? @relation("replyThread", fields: [parentId], references: [id], onDelete: Cascade)
+  children     DiscussionReply[] @relation("replyThread")
+  createdAt    DateTime         @default(now()) @map("created_at")
+
+  @@index([discussionId, createdAt])
+  @@map("discussion_replies")
+}
+
+enum NotificationType {
+  FOLLOW
+  LIKE
+  COMMENT
+  REPLY
+  REPOST
+  MENTION
+}
+
+model Notification {
+  id        String           @id @default(uuid()) @db.Uuid
+  userId    String           @map("user_id") @db.Uuid          // recipient
+  user      User             @relation("recipient", fields: [userId], references: [id], onDelete: Cascade)
+  actorId   String?          @map("actor_id") @db.Uuid          // who triggered it
+  actor     User?            @relation("actor", fields: [actorId], references: [id], onDelete: SetNull)
+  type      NotificationType
+  entityId  String?          @map("entity_id") @db.Uuid         // post/comment/discussion id
+  read      Boolean          @default(false)
+  createdAt DateTime         @default(now()) @map("created_at")
+
+  @@index([userId, read, createdAt])
+  @@map("notifications")
 }
 

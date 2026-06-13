@@ -1,6 +1,7 @@
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import BottomNav from "@/components/BottomNav";
+import { SocialProvider } from "@/components/social/SocialProvider";
 
 export default function MainLayout({
   children,
@@ -8,7 +9,7 @@ export default function MainLayout({
   children: React.ReactNode;
 }) {
   return (
-    <>
+    <SocialProvider>
       {/* Top navbar — desktop only */}
       <div className="hidden md:block">
         <Navbar />
@@ -23,6 +24,6 @@ export default function MainLayout({
 
       {/* Bottom nav — mobile only */}
       <BottomNav />
-    </>
+    </SocialProvider>
   );
 }

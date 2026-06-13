@@ -12,9 +12,13 @@ export const authConfig = {
   providers: [],
   callbacks: {
     jwt({ token, user }) {
+      // Edge-safe: only copies fields off the user object. Role/username
+      // enrichment for OAuth users (which need a DB read) happens in the
+      // full instance's jwt callback in src/lib/auth.ts.
       if (user) {
         token.id = (user as { id: string }).id;
-        token.role = (user as { role: string }).role;
+        const role = (user as { role?: string }).role;
+        if (role) token.role = role;
       }
       return token;
     },
@@ -22,6 +26,8 @@ export const authConfig = {
       if (session.user && token) {
         (session.user as { id?: string }).id = token.id as string;
         (session.user as { role?: string }).role = token.role as string;
+        (session.user as { username?: string | null }).username =
+          (token.username as string | null) ?? null;
       }
       return session;
     },
