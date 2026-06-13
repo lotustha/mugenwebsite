@@ -10,6 +10,7 @@ import { useCurrentUser } from "./SocialProvider";
 import UserAvatar from "./UserAvatar";
 import FollowButton from "./FollowButton";
 import LikeButton from "./LikeButton";
+import VerifiedBadge from "./VerifiedBadge";
 
 /** One full-screen reel: tap to play/pause, double-tap to like, action rail on the right. */
 export default function ReelPlayer({ post, active }: { post: SocialPost; active: boolean }) {
@@ -205,7 +206,10 @@ export default function ReelPlayer({ post, active }: { post: SocialPost; active:
           <div className="mb-2 flex items-center gap-2.5">
             <UserAvatar user={post.author} size="md" ring link />
             <div className="min-w-0">
-              <p className="font-headline truncate font-semibold leading-tight">{display}</p>
+              <p className="font-headline flex items-center gap-1 font-semibold leading-tight">
+                <span className="truncate">{display}</span>
+                {post.author.verified && <VerifiedBadge size={14} />}
+              </p>
               {username && <p className="truncate text-xs text-white/70">@{username}</p>}
             </div>
             {username && (

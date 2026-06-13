@@ -11,14 +11,17 @@ export default function UserAvatar({
   size = "md",
   link = true,
   ring = false,
+  showOnline = true,
 }: {
-  user: Pick<SocialUser, "username" | "displayName" | "avatar">;
+  user: Pick<SocialUser, "username" | "displayName" | "avatar"> & { online?: boolean };
   size?: keyof typeof SIZES;
   link?: boolean;
   ring?: boolean;
+  showOnline?: boolean;
 }) {
   const px = SIZES[size];
   const initial = (user.displayName || user.username || "?").charAt(0).toUpperCase();
+  const dotSize = Math.max(9, Math.round(px * 0.28));
 
   const inner = user.avatar ? (
     // eslint-disable-next-line @next/next/no-img-element
@@ -40,11 +43,20 @@ export default function UserAvatar({
   );
 
   const wrapped = (
-    <span
-      className={`inline-grid shrink-0 place-items-center rounded-full ${ring ? "p-[2px] bg-brand" : ""}`}
-      style={ring ? { width: px + 4, height: px + 4 } : undefined}
-    >
-      {inner}
+    <span className="relative inline-block shrink-0 align-middle">
+      <span
+        className={`inline-grid place-items-center rounded-full ${ring ? "p-[2px] bg-brand" : ""}`}
+        style={ring ? { width: px + 4, height: px + 4 } : undefined}
+      >
+        {inner}
+      </span>
+      {showOnline && user.online && (
+        <span
+          aria-label="Online"
+          className="absolute bottom-0 right-0 rounded-full bg-green-500 ring-2 ring-background"
+          style={{ width: dotSize, height: dotSize }}
+        />
+      )}
     </span>
   );
 

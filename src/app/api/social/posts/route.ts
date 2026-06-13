@@ -14,42 +14,73 @@ const VIDEO_TYPES = ["video/mp4", "video/webm", "video/quicktime", "video/x-m4v"
 const PAGE_SIZE = 12;
 
 /**
- * GET /api/social/posts — public discovery feed.
- * Query: ?tab=recent|reels  ?animeTag=  ?cursor=<postId>  ?limit=
- * Returns READY posts (reels tab returns REEL type). Viewer's like state is
- * included when authenticated.
+ * GET /api/social/posts — public discovery feed ("For You" + reels), ranked
+ * Facebook-style: a time-decayed engagement score (likes + comments, fresher =
+ * higher) with a boost for authors the viewer follows. Anonymous/new users (who
+ * follow no one) simply get the most engaging recent posts — which is what
+ * surfaces popular reels to brand-new users.
+ *
+ * Query: ?tab=recent|reels  ?animeTag=  ?cursor=<offset>  ?limit=
  */
 export async function GET(req: Request) {
   const url = new URL(req.url);
   const tab = url.searchParams.get("tab") ?? "recent";
   const animeTag = url.searchParams.get("animeTag")?.trim() || undefined;
-  const cursor = url.searchParams.get("cursor") || undefined;
+  const offset = Math.max(Number(url.searchParams.get("cursor")) || 0, 0);
   const limit = Math.min(Math.max(Number(url.searchParams.get("limit")) || PAGE_SIZE, 1), 30);
 
   const viewer = await getSessionUser(req);
 
-  const where = {
-    status: "READY" as const,
-    ...(tab === "reels" ? { type: "REEL" as const } : {}),
-    ...(animeTag ? { animeTag: { equals: animeTag, mode: "insensitive" as const } } : {}),
-  };
+  // Rank candidate posts in SQL: HN-style gravity decay over engagement, plus a
+  // strong boost for followed authors. We only need ordered ids here; relations
+  // are hydrated with Prisma below.
+  const params: unknown[] = [];
+  const conds = ["status = 'READY'"];
+  if (tab === "reels") conds.push("type = 'REEL'");
+  if (animeTag) {
+    params.push(animeTag);
+    conds.push(`lower(anime_tag) = lower($${params.length})`);
+  }
+  let followBoost = "0";
+  if (viewer) {
+    params.push(viewer.id);
+    followBoost = `(CASE WHEN author_id IN (SELECT following_id FROM follows WHERE follower_id = $${params.length}::uuid) THEN 5 ELSE 0 END)`;
+  }
+  params.push(limit + 1);
+  const limIdx = params.length;
+  params.push(offset);
+  const offIdx = params.length;
 
-  const posts = await prisma.socialPost.findMany({
-    where,
-    orderBy: { createdAt: "desc" },
-    take: limit + 1,
-    ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+  const sql = `
+    SELECT id FROM social_posts
+    WHERE ${conds.join(" AND ")}
+    ORDER BY (
+      (likes_count + 2 * comments_count + 1)
+      / power(EXTRACT(EPOCH FROM (now() - created_at)) / 3600 + 2, 1.5)
+      + ${followBoost}
+    ) DESC, created_at DESC
+    LIMIT $${limIdx} OFFSET $${offIdx}
+  `;
+  const ranked = await prisma.$queryRawUnsafe<{ id: string }[]>(sql, ...params);
+
+  const hasMore = ranked.length > limit;
+  const pageIds = (hasMore ? ranked.slice(0, limit) : ranked).map((r) => r.id);
+
+  const rows = await prisma.socialPost.findMany({
+    where: { id: { in: pageIds } },
     include: {
       author: { select: userSelect },
       likes: viewer ? { where: { userId: viewer.id }, select: { userId: true } } : false,
       repostOf: { include: { author: { select: userSelect } } },
     },
   });
-
-  const hasMore = posts.length > limit;
-  const page = hasMore ? posts.slice(0, limit) : posts;
-  const items = page.map((p) => serializePost(p as never, viewer?.id));
-  const nextCursor = hasMore ? page[page.length - 1].id : null;
+  // Preserve the ranked order (findMany doesn't guarantee it).
+  const byId = new Map(rows.map((p) => [p.id, p]));
+  const items = pageIds
+    .map((id) => byId.get(id))
+    .filter((p): p is (typeof rows)[number] => !!p)
+    .map((p) => serializePost(p as never, viewer?.id));
+  const nextCursor = hasMore ? String(offset + limit) : null;
 
   return NextResponse.json(withAbsoluteMedia({ items, nextCursor }));
 }

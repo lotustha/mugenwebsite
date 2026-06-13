@@ -7,6 +7,7 @@ import UserAvatar from "./UserAvatar";
 import RelativeTime from "./RelativeTime";
 import FollowButton from "./FollowButton";
 import VerifiedBadge from "./VerifiedBadge";
+import ConnectionsModal from "./ConnectionsModal";
 
 export interface ProfileData {
   id: string;
@@ -14,6 +15,7 @@ export interface ProfileData {
   displayName: string | null;
   avatar: string | null;
   verified: boolean;
+  online: boolean;
   bio: string | null;
   joinedAt: string;
   counts: { followers: number; following: number; posts: number; discussions: number };
@@ -32,7 +34,9 @@ export default function ProfileHeader({
   const router = useRouter();
   const pathname = usePathname();
   const [followers, setFollowers] = useState(profile.counts.followers);
+  const [connKind, setConnKind] = useState<"followers" | "following" | null>(null);
   const display = profile.displayName || profile.username || "Anonymous";
+  const requireAuth = () => router.push(`/auth/login?next=${encodeURIComponent(pathname)}`);
 
   function handleFollowerCount(n: number) {
     setFollowers(n);
@@ -58,6 +62,7 @@ export default function ProfileHeader({
   }
 
   return (
+    <>
     <header className="liquid-glass ambient-shadow rounded-3xl p-5 sm:p-6">
       <div className="flex flex-col items-center gap-4 sm:flex-row sm:items-start sm:gap-6">
         <UserAvatar user={profile} size="xl" ring link={false} />
@@ -76,8 +81,8 @@ export default function ProfileHeader({
           {/* Stats */}
           <div className="mt-4 flex items-center justify-center gap-6 sm:justify-start">
             <Stat label="Posts" value={profile.counts.posts} />
-            <Stat label="Followers" value={followers} />
-            <Stat label="Following" value={profile.counts.following} />
+            <Stat label="Followers" value={followers} onClick={profile.username ? () => setConnKind("followers") : undefined} />
+            <Stat label="Following" value={profile.counts.following} onClick={profile.username ? () => setConnKind("following") : undefined} />
           </div>
 
           {/* Actions */}
@@ -111,14 +116,31 @@ export default function ProfileHeader({
         </div>
       </div>
     </header>
+    {profile.username && (
+      <ConnectionsModal
+        username={profile.username}
+        kind={connKind}
+        open={connKind !== null}
+        onClose={() => setConnKind(null)}
+        onAuthRequired={requireAuth}
+      />
+    )}
+    </>
   );
 }
 
-function Stat({ label, value }: { label: string; value: number }) {
-  return (
-    <div className="text-center">
+function Stat({ label, value, onClick }: { label: string; value: number; onClick?: () => void }) {
+  const inner = (
+    <>
       <p className="font-headline text-lg font-bold tabular-nums text-text-main">{value}</p>
       <p className="text-xs text-text-main/55">{label}</p>
-    </div>
+    </>
+  );
+  return onClick ? (
+    <button type="button" onClick={onClick} className="text-center transition-opacity hover:opacity-80">
+      {inner}
+    </button>
+  ) : (
+    <div className="text-center">{inner}</div>
   );
 }

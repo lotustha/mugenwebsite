@@ -4,12 +4,16 @@
 
 import { absolutizeMediaUrls } from "@/lib/url";
 
+/** A user counts as "online" if their presence heartbeat is within this window. */
+const ONLINE_WINDOW_MS = 3 * 60 * 1000;
+
 export interface PublicUser {
   id: string;
   username: string | null;
   displayName: string | null;
   avatar: string | null;
   verified: boolean;
+  online: boolean;
 }
 
 export interface PublicPost {
@@ -38,6 +42,7 @@ export const userSelect = {
   displayName: true,
   avatar: true,
   verified: true,
+  lastSeenAt: true,
 } as const;
 
 type RawUser = {
@@ -46,10 +51,19 @@ type RawUser = {
   displayName: string | null;
   avatar: string | null;
   verified: boolean;
+  lastSeenAt?: Date | null;
 };
 
 export function serializeUser(u: RawUser): PublicUser {
-  return { id: u.id, username: u.username, displayName: u.displayName, avatar: u.avatar, verified: u.verified };
+  const online = !!u.lastSeenAt && Date.now() - new Date(u.lastSeenAt).getTime() < ONLINE_WINDOW_MS;
+  return {
+    id: u.id,
+    username: u.username,
+    displayName: u.displayName,
+    avatar: u.avatar,
+    verified: u.verified,
+    online,
+  };
 }
 
 interface RawPost {

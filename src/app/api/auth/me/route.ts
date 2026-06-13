@@ -31,7 +31,9 @@ export async function GET(req: Request) {
       if (fresh?.username) user.username = fresh.username;
     }
   }
-  return NextResponse.json(withAbsoluteMedia({ user }));
+  // Loading your own session counts as presence — mark online for others to see.
+  if (user) void prisma.user.update({ where: { id: user.id }, data: { lastSeenAt: new Date() } }).catch(() => {});
+  return NextResponse.json(withAbsoluteMedia({ user: user ? { ...user, online: true } : null }));
 }
 
 /** Update own profile: username (one-time/changeable), displayName, bio, avatar. */

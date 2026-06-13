@@ -7,6 +7,7 @@ export interface SocialUser {
   displayName: string | null;
   avatar: string | null;
   verified: boolean;
+  online: boolean;
 }
 
 export interface SocialPost {
@@ -120,6 +121,32 @@ export async function repost(id: string, caption?: string): Promise<{ post: Soci
       body: JSON.stringify({ caption }),
     }),
   );
+}
+
+/** Presence heartbeat — best-effort, never throws. */
+export async function ping(): Promise<void> {
+  try {
+    await fetch("/api/social/ping", { method: "POST" });
+  } catch {
+    /* offline / ignore */
+  }
+}
+
+export interface Connection extends SocialUser {
+  bio: string | null;
+  isFollowing: boolean;
+  isSelf: boolean;
+}
+
+/** Fetch a user's followers or following list. */
+export async function fetchConnections(
+  username: string,
+  kind: "followers" | "following",
+): Promise<Connection[]> {
+  const data = await json<{ items: Connection[] }>(
+    await fetch(`/api/social/users/${username}/${kind}`, { cache: "no-store" }),
+  );
+  return data.items;
 }
 
 /** Build the share URL for a post (Web Share API / clipboard fallback). */

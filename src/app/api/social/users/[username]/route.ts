@@ -21,7 +21,7 @@ export async function GET(req: Request, { params }: Ctx) {
   const user = await prisma.user.findUnique({
     where: { username: username.toLowerCase() },
     select: {
-      id: true, username: true, displayName: true, avatar: true, bio: true, verified: true, createdAt: true,
+      id: true, username: true, displayName: true, avatar: true, bio: true, verified: true, lastSeenAt: true, createdAt: true,
       _count: { select: { followers: true, following: true, socialPosts: true, discussions: true } },
     },
   });
@@ -79,6 +79,7 @@ export async function GET(req: Request, { params }: Ctx) {
         avatar: user.avatar,
         bio: user.bio,
         verified: user.verified,
+        online: !!user.lastSeenAt && Date.now() - new Date(user.lastSeenAt).getTime() < 3 * 60 * 1000,
         joinedAt: user.createdAt.toISOString(),
         counts: {
           followers: user._count.followers,
