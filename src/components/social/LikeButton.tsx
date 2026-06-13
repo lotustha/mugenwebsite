@@ -5,42 +5,64 @@ import { motion, AnimatePresence } from "framer-motion";
 import { toggleLike } from "@/lib/social-client";
 import { useCurrentUser } from "./SocialProvider";
 
-/** Heart like-button with burst animation and optimistic toggle. */
+/**
+ * Heart like-button with burst animation and optimistic toggle.
+ *
+ * Two modes:
+ * - Self-managed (default): owns liked/count state and calls the API itself.
+ * - Controlled (`controlled` + `onToggle`): renders from props and delegates the
+ *   toggle to the parent — used by PostCard so the Instagram-style "N likes" line
+ *   and double-tap-to-like share one source of truth with the heart.
+ * `showCount={false}` hides the inline count (IG shows it on a separate line).
+ */
 export default function LikeButton({
   postId,
   liked: initialLiked,
   count: initialCount,
   onAuthRequired,
   size = 22,
+  controlled = false,
+  onToggle,
+  showCount = true,
 }: {
   postId: string;
   liked: boolean;
   count: number;
   onAuthRequired?: () => void;
   size?: number;
+  controlled?: boolean;
+  onToggle?: () => void;
+  showCount?: boolean;
 }) {
   const { user } = useCurrentUser();
-  const [liked, setLiked] = useState(initialLiked);
-  const [count, setCount] = useState(initialCount);
+  const [selfLiked, setSelfLiked] = useState(initialLiked);
+  const [selfCount, setSelfCount] = useState(initialCount);
   const [busy, setBusy] = useState(false);
+
+  const liked = controlled ? initialLiked : selfLiked;
+  const count = controlled ? initialCount : selfCount;
 
   async function handle() {
     if (!user) {
       onAuthRequired?.();
       return;
     }
+    if (controlled) {
+      onToggle?.();
+      return;
+    }
     if (busy) return;
     const next = !liked;
-    setLiked(next);
-    setCount((c) => c + (next ? 1 : -1));
+    setSelfLiked(next);
+    setSelfCount((c) => c + (next ? 1 : -1));
     setBusy(true);
     try {
       const res = await toggleLike(postId, liked);
-      setLiked(res.liked);
-      setCount(res.likesCount);
+      setSelfLiked(res.liked);
+      setSelfCount(res.likesCount);
     } catch {
-      setLiked(liked); // revert
-      setCount(initialCount);
+      setSelfLiked(liked); // revert
+      setSelfCount(initialCount);
     } finally {
       setBusy(false);
     }
@@ -81,7 +103,7 @@ export default function LikeButton({
           <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 1 0-7.78 7.78L12 21.23l8.84-8.84a5.5 5.5 0 0 0 0-7.78z" />
         </motion.svg>
       </span>
-      <span className="tabular-nums">{count > 0 ? count : ""}</span>
+      {showCount && <span className="tabular-nums">{count > 0 ? count : ""}</span>}
     </button>
   );
 }

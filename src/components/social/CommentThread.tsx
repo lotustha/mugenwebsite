@@ -10,6 +10,7 @@ import {
   type SocialUser,
 } from "@/lib/social-client";
 import { useCurrentUser } from "./SocialProvider";
+import VerifiedBadge from "./VerifiedBadge";
 import UserAvatar from "./UserAvatar";
 import RelativeTime from "./RelativeTime";
 
@@ -233,7 +234,10 @@ function CommentRow({
       <div className="min-w-0 flex-1">
         <div className="rounded-2xl bg-surface-low px-3.5 py-2.5">
           <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
-            <span className="font-headline text-sm font-semibold text-text-main">{display}</span>
+            <span className="font-headline inline-flex items-center gap-1 text-sm font-semibold text-text-main">
+              {display}
+              {comment.author.verified && <VerifiedBadge size={13} />}
+            </span>
             {isAuthor && <span className="bg-brand-soft text-brand rounded-full px-2 py-0.5 text-[10px] font-medium">Author</span>}
             <RelativeTime iso={comment.createdAt} className="text-xs text-text-main/40" />
           </div>

@@ -9,6 +9,7 @@ export interface PublicUser {
   username: string | null;
   displayName: string | null;
   avatar: string | null;
+  verified: boolean;
 }
 
 export interface PublicPost {
@@ -36,12 +37,19 @@ export const userSelect = {
   username: true,
   displayName: true,
   avatar: true,
+  verified: true,
 } as const;
 
-type RawUser = { id: string; username: string | null; displayName: string | null; avatar: string | null };
+type RawUser = {
+  id: string;
+  username: string | null;
+  displayName: string | null;
+  avatar: string | null;
+  verified: boolean;
+};
 
 export function serializeUser(u: RawUser): PublicUser {
-  return { id: u.id, username: u.username, displayName: u.displayName, avatar: u.avatar };
+  return { id: u.id, username: u.username, displayName: u.displayName, avatar: u.avatar, verified: u.verified };
 }
 
 interface RawPost {

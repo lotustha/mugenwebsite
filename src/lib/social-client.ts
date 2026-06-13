@@ -6,6 +6,7 @@ export interface SocialUser {
   username: string | null;
   displayName: string | null;
   avatar: string | null;
+  verified: boolean;
 }
 
 export interface SocialPost {

@@ -74,6 +74,7 @@ model User {
   displayName String?     @map("display_name")
   avatar      String?                             // absolute or /uploads/* URL
   bio         String?     @db.Text
+  verified    Boolean     @default(false)         // admin-granted blue tick (paid tier later)
   posts       Post[]
   wallpapers  Wallpaper[]
   createdAt   DateTime    @default(now()) @map("created_at")

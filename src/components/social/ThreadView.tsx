@@ -7,6 +7,7 @@ import { useCurrentUser } from "./SocialProvider";
 import type { SocialComment } from "@/lib/social-client";
 import UserAvatar from "./UserAvatar";
 import RelativeTime from "./RelativeTime";
+import VerifiedBadge from "./VerifiedBadge";
 
 type Reply = SocialComment;
 
@@ -115,7 +116,10 @@ function ReplyItem({
         <UserAvatar user={node.author} size="sm" />
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-x-2 text-xs text-text-main/55">
-            <span className="font-medium text-text-main/85">{display}</span>
+            <span className="inline-flex items-center gap-1 font-medium text-text-main/85">
+              {display}
+              {node.author.verified && <VerifiedBadge size={12} />}
+            </span>
             <span aria-hidden>·</span>
             <RelativeTime iso={node.createdAt} />
           </div>

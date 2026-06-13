@@ -6,12 +6,14 @@ import { usePathname, useRouter } from "next/navigation";
 import UserAvatar from "./UserAvatar";
 import RelativeTime from "./RelativeTime";
 import FollowButton from "./FollowButton";
+import VerifiedBadge from "./VerifiedBadge";
 
 export interface ProfileData {
   id: string;
   username: string | null;
   displayName: string | null;
   avatar: string | null;
+  verified: boolean;
   bio: string | null;
   joinedAt: string;
   counts: { followers: number; following: number; posts: number; discussions: number };
@@ -61,7 +63,10 @@ export default function ProfileHeader({
         <UserAvatar user={profile} size="xl" ring link={false} />
 
         <div className="min-w-0 flex-1 text-center sm:text-left">
-          <h1 className="font-headline text-brand text-2xl font-bold leading-tight sm:text-3xl">{display}</h1>
+          <h1 className="font-headline text-brand inline-flex items-center gap-1.5 text-2xl font-bold leading-tight sm:text-3xl">
+            {display}
+            {profile.verified && <VerifiedBadge size={20} />}
+          </h1>
           {profile.username && <p className="mt-0.5 text-sm text-text-main/60">@{profile.username}</p>}
           {profile.bio && <p className="mt-3 text-[15px] leading-relaxed text-text-main/85">{profile.bio}</p>}
           <p className="mt-2 text-xs text-text-main/50">
