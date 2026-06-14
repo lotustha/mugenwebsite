@@ -137,9 +137,12 @@ export default function PostCard({
           {post.author.username && <p className="truncate text-xs text-text-main/50">@{post.author.username}</p>}
         </div>
         {media.animeTag && (
-          <span className="bg-brand-soft text-brand hidden shrink-0 rounded-full px-3 py-1 text-xs font-medium sm:inline">
+          <Link
+            href={`/social?animeTag=${encodeURIComponent(media.animeTag)}`}
+            className="bg-brand-soft text-brand hidden shrink-0 rounded-full px-3 py-1 text-xs font-medium transition-opacity hover:opacity-80 sm:inline"
+          >
             #{media.animeTag}
-          </span>
+          </Link>
         )}
 
         {/* ⋯ options menu */}

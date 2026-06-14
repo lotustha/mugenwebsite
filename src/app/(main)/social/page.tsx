@@ -1,7 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
-import { usePathname, useRouter } from "next/navigation";
+import { Suspense, useCallback, useEffect, useRef, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { fetchFeed, type SocialPost } from "@/lib/social-client";
 import { useCurrentUser } from "@/components/social/SocialProvider";
@@ -13,10 +13,12 @@ import UserAvatar from "@/components/social/UserAvatar";
 
 type Tab = "forYou" | "following";
 
-export default function SocialFeedPage() {
+function SocialFeedInner() {
   const { user, loading: authLoading } = useCurrentUser();
   const router = useRouter();
   const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const animeTag = searchParams.get("animeTag")?.trim() || undefined;
 
   const [tab, setTab] = useState<Tab>("forYou");
   const [posts, setPosts] = useState<SocialPost[]>([]);
@@ -34,7 +36,8 @@ export default function SocialFeedPage() {
   }, [router, pathname]);
 
   // Whether the Following tab can actually load (must be logged in).
-  const followingBlocked = tab === "following" && !authLoading && !user;
+  // When viewing an anime's discussion (animeTag filter), tabs don't apply.
+  const followingBlocked = !animeTag && tab === "following" && !authLoading && !user;
 
   const load = useCallback(
     async (reset: boolean) => {
@@ -51,7 +54,8 @@ export default function SocialFeedPage() {
       setError(null);
       try {
         const res = await fetchFeed({
-          following: tab === "following",
+          following: !animeTag && tab === "following",
+          animeTag,
           cursor: reset ? null : cursor,
         });
         setPosts((prev) => (reset ? res.items : [...prev, ...res.items]));
@@ -64,9 +68,9 @@ export default function SocialFeedPage() {
         setLoadingMore(false);
       }
     },
-    // posts.length intentionally excluded — guarded via ref; reload keyed on tab
+    // posts.length intentionally excluded — guarded via ref; reload keyed on tab/tag
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [tab, cursor],
+    [tab, cursor, animeTag],
   );
 
   // Reset + load whenever the tab changes (and auth resolves for Following).
@@ -87,7 +91,7 @@ export default function SocialFeedPage() {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tab, followingBlocked]);
+  }, [tab, followingBlocked, animeTag]);
 
   // Infinite scroll sentinel.
   useEffect(() => {
@@ -125,21 +129,40 @@ export default function SocialFeedPage() {
 
   return (
     <div className="mx-auto max-w-xl px-3 pb-28 pt-3 md:pb-12">
-      {/* Sticky tabs */}
-      <div className="glass-panel sticky top-2 z-40 mb-4 flex items-center gap-1 rounded-full p-1 md:top-24">
-        {tabs.map((t) => (
-          <button
-            key={t.key}
-            type="button"
-            onClick={() => setTab(t.key)}
-            className={`relative flex-1 rounded-full px-4 py-2 text-sm font-semibold transition-colors ${
-              tab === t.key ? "bg-brand text-white" : "text-text-main/60 hover:text-text-main"
-            }`}
+      {/* Anime discussion banner OR feed tabs */}
+      {animeTag ? (
+        <div className="glass-panel mb-4 flex items-center gap-3 rounded-2xl px-4 py-3">
+          <span className="bg-brand-soft text-brand grid h-10 w-10 shrink-0 place-items-center rounded-full text-lg">#</span>
+          <div className="min-w-0 flex-1">
+            <p className="text-xs text-text-main/50">Discussion</p>
+            <h1 className="font-headline truncate text-lg font-bold text-text-main">{animeTag}</h1>
+          </div>
+          <Link
+            href="/social"
+            className="shrink-0 rounded-full p-2 text-text-main/50 transition-colors hover:bg-white/10 hover:text-text-main"
+            aria-label="Clear filter"
           >
-            {t.label}
-          </button>
-        ))}
-      </div>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M18 6 6 18M6 6l12 12" />
+            </svg>
+          </Link>
+        </div>
+      ) : (
+        <div className="glass-panel sticky top-2 z-40 mb-4 flex items-center gap-1 rounded-full p-1 md:top-24">
+          {tabs.map((t) => (
+            <button
+              key={t.key}
+              type="button"
+              onClick={() => setTab(t.key)}
+              className={`relative flex-1 rounded-full px-4 py-2 text-sm font-semibold transition-colors ${
+                tab === t.key ? "bg-brand text-white" : "text-text-main/60 hover:text-text-main"
+              }`}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* Inline composer trigger */}
       <button
@@ -156,7 +179,9 @@ export default function SocialFeedPage() {
             </svg>
           </span>
         )}
-        <span className="text-text-main/50">What&apos;s on your mind?</span>
+        <span className="text-text-main/50">
+          {animeTag ? `Start a discussion about ${animeTag}…` : "What's on your mind?"}
+        </span>
       </button>
 
       {/* Body */}
@@ -191,12 +216,18 @@ export default function SocialFeedPage() {
           </span>
           <div>
             <h2 className="font-headline text-lg font-semibold text-text-main">
-              {tab === "following" ? "Your timeline is quiet" : "The feed awaits its first hero"}
+              {animeTag
+                ? `No posts about ${animeTag} yet`
+                : tab === "following"
+                  ? "Your timeline is quiet"
+                  : "The feed awaits its first hero"}
             </h2>
             <p className="mt-1 text-sm text-text-main/60">
-              {tab === "following"
-                ? "Follow some creators or post something yourself."
-                : "Be the first to share a moment with the community."}
+              {animeTag
+                ? "Be the first to start the discussion."
+                : tab === "following"
+                  ? "Follow some creators or post something yourself."
+                  : "Be the first to share a moment with the community."}
             </p>
           </div>
           <button type="button" onClick={openComposer} className="bg-brand rounded-full px-6 py-2.5 text-sm font-semibold text-white">
@@ -232,8 +263,21 @@ export default function SocialFeedPage() {
       )}
 
       {/* Floating composer + inline composer modal */}
-      <ComposerFab onCreated={handleCreated} />
-      <PostComposer open={composerOpen} onClose={() => setComposerOpen(false)} onCreated={handleCreated} />
+      <ComposerFab onCreated={handleCreated} initialAnimeTag={animeTag} />
+      <PostComposer
+        open={composerOpen}
+        onClose={() => setComposerOpen(false)}
+        onCreated={handleCreated}
+        initialAnimeTag={animeTag}
+      />
     </div>
+  );
+}
+
+export default function SocialFeedPage() {
+  return (
+    <Suspense fallback={<div className="min-h-[60vh]" />}>
+      <SocialFeedInner />
+    </Suspense>
   );
 }

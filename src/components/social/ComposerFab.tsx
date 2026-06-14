@@ -8,7 +8,13 @@ import { useCurrentUser } from "./SocialProvider";
 import PostComposer from "./PostComposer";
 
 /** Floating action button that opens the post composer (or redirects to login). */
-export default function ComposerFab({ onCreated }: { onCreated: (post: SocialPost) => void }) {
+export default function ComposerFab({
+  onCreated,
+  initialAnimeTag,
+}: {
+  onCreated: (post: SocialPost) => void;
+  initialAnimeTag?: string;
+}) {
   const { user, loading } = useCurrentUser();
   const router = useRouter();
   const pathname = usePathname();
@@ -39,7 +45,7 @@ export default function ComposerFab({ onCreated }: { onCreated: (post: SocialPos
         </svg>
       </motion.button>
 
-      <PostComposer open={open} onClose={() => setOpen(false)} onCreated={onCreated} />
+      <PostComposer open={open} onClose={() => setOpen(false)} onCreated={onCreated} initialAnimeTag={initialAnimeTag} />
     </>
   );
 }

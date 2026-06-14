@@ -19,10 +19,12 @@ export default function PostComposer({
   open,
   onClose,
   onCreated,
+  initialAnimeTag,
 }: {
   open: boolean;
   onClose: () => void;
   onCreated: (post: SocialPost) => void;
+  initialAnimeTag?: string;
 }) {
   const { user, loading: authLoading } = useCurrentUser();
   const router = useRouter();
@@ -33,7 +35,7 @@ export default function PostComposer({
   const [kind, setKind] = useState<Kind | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [caption, setCaption] = useState("");
-  const [animeTag, setAnimeTag] = useState("");
+  const [animeTag, setAnimeTag] = useState(initialAnimeTag ?? "");
   const [visibility, setVisibility] = useState<PostVisibility>("PUBLIC");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -59,14 +61,14 @@ export default function PostComposer({
     setFile(null);
     setKind(null);
     setCaption("");
-    setAnimeTag("");
+    setAnimeTag(initialAnimeTag ?? "");
     setVisibility("PUBLIC");
     setAnimeResults([]);
     setAnimeOpen(false);
     setError(null);
     setSubmitting(false);
     setDragging(false);
-  }, [clearPreview]);
+  }, [clearPreview, initialAnimeTag]);
 
   // Revoke object URL on unmount.
   useEffect(() => () => clearPreview(), [clearPreview]);
@@ -99,6 +101,13 @@ export default function PostComposer({
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, submitting]);
+
+  // Pre-tag with the anime when opened from an anime discussion page.
+  useEffect(() => {
+    if (!open) return;
+    animeSkipRef.current = true; // don't auto-search the seeded value
+    void Promise.resolve().then(() => setAnimeTag(initialAnimeTag ?? ""));
+  }, [open, initialAnimeTag]);
 
   // Debounced anime-title search against the anime API for the tag field.
   useEffect(() => {
