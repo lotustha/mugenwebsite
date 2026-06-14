@@ -76,7 +76,7 @@ export default function AudiencePicker({
       </button>
 
       {open && (
-        <div className="glass-dark absolute bottom-full left-0 z-30 mb-2 w-60 overflow-hidden rounded-2xl border border-outline-variant p-1.5 shadow-xl">
+        <div className="glass-dark absolute left-0 top-full z-40 mt-2 w-60 overflow-hidden rounded-2xl border border-outline-variant p-1.5 shadow-xl">
           <p className="px-3 py-1.5 text-xs font-semibold text-text-main/50">Who can see this?</p>
           {ORDER.map((key) => {
             const opt = AUDIENCE[key];
