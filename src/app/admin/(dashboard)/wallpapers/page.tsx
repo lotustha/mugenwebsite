@@ -964,6 +964,7 @@ function UploadTab({
   const [selectedCats, setSelectedCats] = useState<WallpaperCategory[]>([]);
   const [tagsInput, setTagsInput] = useState("");
   const [file, setFile] = useState<File | null>(null);
+  const [announce, setAnnounce] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
@@ -980,11 +981,12 @@ function UploadTab({
     if (description.trim()) fd.append("description", description.trim());
     if (selectedCats.length) fd.append("categories", selectedCats.map(c => c.name).join(","));
     if (tagsInput.trim()) fd.append("tags", tagsInput.trim());
+    if (announce) fd.append("announce", "true");
     const res = await fetch("/api/admin/wallpapers", { method: "POST", body: fd });
     if (res.ok) {
       const w = await res.json();
       onUploaded(w);
-      setTitle(""); setDescription(""); setSelectedCats([]); setTagsInput(""); setFile(null);
+      setTitle(""); setDescription(""); setSelectedCats([]); setTagsInput(""); setFile(null); setAnnounce(false);
       setSuccess("Uploaded successfully!");
       setTimeout(() => setSuccess(""), 3000);
     } else {
@@ -1057,6 +1059,14 @@ function UploadTab({
             placeholder="naruto, sasuke, shonen…" className={inputCls} style={inputSt} />
           <p className="mt-1 font-body text-[0.625rem]" style={{ color: textDim }}>Comma-separated</p>
         </div>
+
+        <label className="flex cursor-pointer items-center gap-2.5 rounded-xl px-3.5 py-3" style={{ background: "rgba(139,92,246,0.07)", border: "1px solid rgba(139,92,246,0.15)" }}>
+          <input type="checkbox" checked={announce} onChange={(e) => setAnnounce(e.target.checked)} className="h-4 w-4 accent-[#8b5cf6]" />
+          <span className="font-body text-sm" style={{ color: "#ba9eff" }}>
+            Announce to social feed
+            <span className="block text-[0.625rem]" style={{ color: textDim }}>Posts this wallpaper from @MugenAnime so users can discuss it.</span>
+          </span>
+        </label>
 
         <div className="mt-auto pt-1">
           <GradientBtn type="submit" disabled={uploading || !file || !title} className="w-full justify-center">

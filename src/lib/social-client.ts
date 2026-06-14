@@ -1,6 +1,9 @@
 // Client-side typed helpers for the social API. Same shapes the mobile app sees.
 // All fetches are same-origin and rely on the NextAuth cookie session on web.
 
+/** Handle of the official system account everyone follows (locked, can't unfollow). */
+export const OFFICIAL_USERNAME = "mugenanime";
+
 export interface SocialUser {
   id: string;
   username: string | null;

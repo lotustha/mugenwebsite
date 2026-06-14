@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/auth-helpers";
 import { notify } from "@/lib/notify";
+import { OFFICIAL_USERNAME } from "@/lib/social-client";
 
 export const dynamic = "force-dynamic";
 
@@ -38,6 +39,11 @@ export async function DELETE(req: Request, { params }: Ctx) {
   const gate = await requireUser(req);
   if ("error" in gate) return gate.error;
   const { user } = gate;
+
+  // The official account is a locked follow — nobody can unfollow the website.
+  if (username.toLowerCase() === OFFICIAL_USERNAME) {
+    return NextResponse.json({ error: "You can't unfollow the official account" }, { status: 403 });
+  }
 
   const target = await targetOf(username);
   if (!target) return NextResponse.json({ error: "User not found" }, { status: 404 });

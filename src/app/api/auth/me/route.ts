@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getSessionUser } from "@/lib/auth-helpers";
 import { generateUniqueUsername } from "@/lib/ensure-username";
+import { ensureFollowsOfficial } from "@/lib/official-account";
 import { isValidUsername } from "@/lib/username";
 import { withAbsoluteMedia } from "@/lib/social-serialize";
 
@@ -33,6 +34,8 @@ export async function GET(req: Request) {
   }
   // Loading your own session counts as presence — mark online for others to see.
   if (user) void prisma.user.update({ where: { id: user.id }, data: { lastSeenAt: new Date() } }).catch(() => {});
+  // Everybody follows the website's official account (idempotent, fire-and-forget).
+  if (user) void ensureFollowsOfficial(user.id);
   return NextResponse.json(withAbsoluteMedia({ user: user ? { ...user, online: true } : null }));
 }
 

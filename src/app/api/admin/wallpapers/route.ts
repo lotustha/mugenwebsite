@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/auth-helpers";
 import { saveBuffer } from "@/lib/storage";
+import { postWallpaperAnnouncement } from "@/lib/official-account";
 
 async function getUploaderId() {
   const user = await requireAdmin();
@@ -69,6 +70,7 @@ export async function POST(request: Request) {
     const description = (formData.get("description") as string | null)?.trim() || null;
     const categoryNamesRaw = (formData.get("categories") as string | null) ?? "";
     const tagsRaw = (formData.get("tags") as string | null) ?? "";
+    const announce = (formData.get("announce") as string | null) === "true";
 
     if (!file || !title) return NextResponse.json({ error: "file and title required" }, { status: 400 });
 
@@ -127,6 +129,16 @@ export async function POST(request: Request) {
         description: wallpaper.description ?? null,
       }).catch(() => {})
     );
+
+    // Announce to the social feed (official account) when flagged.
+    if (announce) {
+      void postWallpaperAnnouncement({
+        title: wallpaper.title,
+        fileUrl: wallpaper.fileUrl,
+        type: wallpaper.type,
+        animeTag: categoryNames[0] ?? null,
+      });
+    }
 
     return NextResponse.json(wallpaper, { status: 201 });
   } catch (e: any) {
