@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { postShareUrl, repost as doRepost } from "@/lib/social-client";
 import { useCurrentUser } from "./SocialProvider";
@@ -23,7 +24,8 @@ export default function ShareSheet({
   const url = postShareUrl(postId);
 
   useEffect(() => {
-    if (!open) setCopied(false);
+    if (open) return;
+    void Promise.resolve().then(() => setCopied(false));
   }, [open]);
 
   async function nativeShare() {
@@ -60,11 +62,12 @@ export default function ShareSheet({
     }
   }
 
-  return (
+  if (typeof document === "undefined") return null;
+  return createPortal(
     <AnimatePresence>
       {open && (
         <motion.div
-          className="fixed inset-0 z-[60] flex items-end justify-center sm:items-center"
+          className="fixed inset-0 z-[130] flex items-end justify-center sm:items-center"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
@@ -100,6 +103,7 @@ export default function ShareSheet({
           </motion.div>
         </motion.div>
       )}
-    </AnimatePresence>
+    </AnimatePresence>,
+    document.body,
   );
 }

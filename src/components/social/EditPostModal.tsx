@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import { updatePost, type SocialPost, type PostVisibility } from "@/lib/social-client";
 import AudiencePicker from "./AudiencePicker";
@@ -49,7 +50,8 @@ export default function EditPostModal({
     }
   }
 
-  return (
+  if (typeof document === "undefined") return null;
+  return createPortal(
     <AnimatePresence>
       {open && (
         <motion.div
@@ -138,6 +140,7 @@ export default function EditPostModal({
           </motion.div>
         </motion.div>
       )}
-    </AnimatePresence>
+    </AnimatePresence>,
+    document.body,
   );
 }

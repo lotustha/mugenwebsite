@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import Link from "next/link";
 import { AnimatePresence, motion } from "framer-motion";
 import { fetchConnections, type Connection } from "@/lib/social-client";
@@ -60,7 +61,8 @@ export default function ConnectionsModal({
     };
   }, [open, onClose]);
 
-  return (
+  if (typeof document === "undefined") return null;
+  return createPortal(
     <AnimatePresence>
       {open && kind && (
         <motion.div
@@ -138,6 +140,7 @@ export default function ConnectionsModal({
           </motion.div>
         </motion.div>
       )}
-    </AnimatePresence>
+    </AnimatePresence>,
+    document.body,
   );
 }
