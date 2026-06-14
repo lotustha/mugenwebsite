@@ -102,8 +102,16 @@ export async function POST(req: Request) {
   const caption = (form.get("caption") as string | null)?.slice(0, 2200) || null;
   const animeTag = (form.get("animeTag") as string | null)?.trim().slice(0, 80) || null;
 
+  // Text-only status post: no media, but a caption is required.
   if (!(file instanceof File)) {
-    return NextResponse.json({ error: "A media file is required" }, { status: 400 });
+    if (!caption?.trim()) {
+      return NextResponse.json({ error: "Write something or add media" }, { status: 400 });
+    }
+    const post = await prisma.socialPost.create({
+      data: { authorId: user.id, type: "TEXT", status: "READY", caption, animeTag },
+      include: { author: { select: userSelect } },
+    });
+    return NextResponse.json(withAbsoluteMedia({ post: serializePost(post as never, user.id) }), { status: 201 });
   }
 
   const isImage = IMAGE_TYPES.includes(file.type);

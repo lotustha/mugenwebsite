@@ -18,7 +18,7 @@ export interface PublicUser {
 
 export interface PublicPost {
   id: string;
-  type: "IMAGE" | "VIDEO" | "REEL";
+  type: "IMAGE" | "VIDEO" | "REEL" | "TEXT";
   status: "PROCESSING" | "READY" | "FAILED";
   caption: string | null;
   mediaUrl: string | null;

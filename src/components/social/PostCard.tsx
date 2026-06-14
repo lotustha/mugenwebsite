@@ -36,6 +36,7 @@ export default function PostCard({
   const display = post.author.displayName || post.author.username || "Anonymous";
   // For reposts, the media lives on the original post.
   const media = post.repostOf ?? post;
+  const isText = media.type === "TEXT";
 
   async function doToggle() {
     if (!user) {
@@ -99,29 +100,35 @@ export default function PostCard({
         )}
       </header>
 
-      {/* Media (double-tap to like on images) */}
-      <div
-        className="relative"
-        onDoubleClick={media.type === "IMAGE" ? onDoubleTapMedia : undefined}
-      >
-        <PostMedia post={media} priority={priority} />
-        <AnimatePresence>
-          {heartBurst && (
-            <motion.div
-              key="bigheart"
-              initial={{ scale: 0, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 1.25, opacity: 0 }}
-              transition={{ duration: 0.3, ease: "easeOut" }}
-              className="pointer-events-none absolute inset-0 grid place-items-center"
-            >
-              <svg width="96" height="96" viewBox="0 0 24 24" fill="#fff" style={{ filter: "drop-shadow(0 4px 14px rgba(0,0,0,0.45))" }}>
-                <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 1 0-7.78 7.78L12 21.23l8.84-8.84a5.5 5.5 0 0 0 0-7.78z" />
-              </svg>
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </div>
+      {/* Text-only status: caption is the body. */}
+      {isText ? (
+        media.caption && (
+          <p className="whitespace-pre-wrap break-words px-4 pb-3 text-[17px] leading-relaxed text-text-main">
+            {media.caption}
+          </p>
+        )
+      ) : (
+        /* Media (double-tap to like on images) */
+        <div className="relative" onDoubleClick={media.type === "IMAGE" ? onDoubleTapMedia : undefined}>
+          <PostMedia post={media} priority={priority} />
+          <AnimatePresence>
+            {heartBurst && (
+              <motion.div
+                key="bigheart"
+                initial={{ scale: 0, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 1.25, opacity: 0 }}
+                transition={{ duration: 0.3, ease: "easeOut" }}
+                className="pointer-events-none absolute inset-0 grid place-items-center"
+              >
+                <svg width="96" height="96" viewBox="0 0 24 24" fill="#fff" style={{ filter: "drop-shadow(0 4px 14px rgba(0,0,0,0.45))" }}>
+                  <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 1 0-7.78 7.78L12 21.23l8.84-8.84a5.5 5.5 0 0 0 0-7.78z" />
+                </svg>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+      )}
 
       {/* Action bar */}
       <div className="flex items-center gap-4 px-3.5 pt-3">
@@ -164,8 +171,8 @@ export default function PostCard({
         </p>
       )}
 
-      {/* Caption: username + text (IG style) */}
-      {post.caption && (
+      {/* Caption: username + text (IG style; text posts show it as the body above) */}
+      {!isText && post.caption && (
         <p className="px-3.5 pt-1 text-[15px] leading-relaxed text-text-main/90">
           {post.author.username ? (
             <Link href={`/u/${post.author.username}`} className="font-semibold text-text-main hover:underline">

@@ -104,14 +104,16 @@ export default function PostComposer({
       return;
     }
     const q = animeTag.trim();
-    if (q.length < 2) {
-      setAnimeResults([]);
-      setAnimeOpen(false);
-      return;
-    }
     let cancelled = false;
-    setAnimeSearching(true);
+    // All state updates live inside the deferred timeout (never synchronously in
+    // the effect body) to avoid cascading renders.
     const t = setTimeout(async () => {
+      if (q.length < 2) {
+        setAnimeResults([]);
+        setAnimeOpen(false);
+        return;
+      }
+      setAnimeSearching(true);
       try {
         const res = await fetch(`/api/anime/search?query=${encodeURIComponent(q)}`);
         const data = await res.json();
@@ -191,12 +193,13 @@ export default function PostComposer({
   }
 
   async function handleSubmit() {
-    if (!file || submitting) return;
+    if (submitting) return;
+    if (!file && !caption.trim()) return; // need media or text
     setSubmitting(true);
     setError(null);
     try {
       const form = new FormData();
-      form.set("file", file);
+      if (file) form.set("file", file);
       if (caption.trim()) form.set("caption", caption.trim());
       if (animeTag.trim()) form.set("animeTag", animeTag.trim());
       const res = await createPost(form);
@@ -405,7 +408,7 @@ export default function PostComposer({
               <button
                 type="button"
                 onClick={handleSubmit}
-                disabled={!file || submitting}
+                disabled={(!file && !caption.trim()) || submitting}
                 className="bg-brand flex items-center gap-2 rounded-full px-6 py-2.5 text-sm font-semibold text-white transition-opacity disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {submitting && (

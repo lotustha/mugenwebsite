@@ -343,6 +343,7 @@ enum SocialPostType {
   IMAGE
   VIDEO
   REEL    // short-form vertical video
+  TEXT    // caption-only status post (no media)
 }
 
 enum SocialPostStatus {

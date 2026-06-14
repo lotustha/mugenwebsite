@@ -109,6 +109,7 @@ function MediaGrid({ posts, reels }: { posts: SocialPost[]; reels: boolean }) {
       {posts.map((p) => {
         const media = p.repostOf ?? p;
         const thumb = media.type === "IMAGE" ? media.mediaUrl : media.posterUrl;
+        const isVideo = media.type === "VIDEO" || media.type === "REEL";
         return (
           <Link
             key={p.id}
@@ -123,10 +124,14 @@ function MediaGrid({ posts, reels }: { posts: SocialPost[]; reels: boolean }) {
                 loading="lazy"
                 className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
               />
+            ) : media.type === "TEXT" ? (
+              <span className="bg-brand-soft flex h-full w-full items-center justify-center p-2.5 text-center text-[11px] font-medium leading-snug text-text-main/85 line-clamp-5">
+                {media.caption || "Text"}
+              </span>
             ) : (
               <span className="grid h-full w-full place-items-center text-xs text-text-main/30">No media</span>
             )}
-            {media.type !== "IMAGE" && (
+            {isVideo && (
               <span className="absolute right-1.5 top-1.5 grid h-6 w-6 place-items-center rounded-full bg-black/50 backdrop-blur-sm">
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="white">
                   <path d="M8 5v14l11-7z" />
