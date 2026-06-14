@@ -25,7 +25,13 @@ export async function GET(req: Request) {
   const authorIds = [...following.map((f) => f.followingId), user.id];
 
   const posts = await prisma.socialPost.findMany({
-    where: { status: "READY", authorId: { in: authorIds } },
+    // Followed authors' posts + own. Hide others' PRIVATE posts (you follow them,
+    // so their FOLLOWERS posts are fair game; only "Only me" is excluded).
+    where: {
+      status: "READY",
+      authorId: { in: authorIds },
+      OR: [{ authorId: user.id }, { visibility: { not: "PRIVATE" } }],
+    },
     orderBy: { createdAt: "desc" },
     take: limit + 1,
     ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),

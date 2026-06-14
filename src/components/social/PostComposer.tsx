@@ -3,9 +3,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
-import { createPost, type SocialPost } from "@/lib/social-client";
+import { createPost, type SocialPost, type PostVisibility } from "@/lib/social-client";
 import { useCurrentUser } from "./SocialProvider";
 import UserAvatar from "./UserAvatar";
+import AudiencePicker from "./AudiencePicker";
 
 const MAX_CAPTION = 2200;
 const MAX_IMAGE = 12 * 1024 * 1024; // 12MB
@@ -33,6 +34,7 @@ export default function PostComposer({
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [caption, setCaption] = useState("");
   const [animeTag, setAnimeTag] = useState("");
+  const [visibility, setVisibility] = useState<PostVisibility>("PUBLIC");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [dragging, setDragging] = useState(false);
@@ -58,6 +60,7 @@ export default function PostComposer({
     setKind(null);
     setCaption("");
     setAnimeTag("");
+    setVisibility("PUBLIC");
     setAnimeResults([]);
     setAnimeOpen(false);
     setError(null);
@@ -202,6 +205,7 @@ export default function PostComposer({
       if (file) form.set("file", file);
       if (caption.trim()) form.set("caption", caption.trim());
       if (animeTag.trim()) form.set("animeTag", animeTag.trim());
+      form.set("visibility", visibility);
       const res = await createPost(form);
       onCreated(res.post);
       reset();
@@ -263,7 +267,9 @@ export default function PostComposer({
                     <p className="font-headline truncate font-semibold text-text-main">
                       {user.displayName || user.username || "You"}
                     </p>
-                    {user.username && <p className="truncate text-xs text-text-main/50">@{user.username}</p>}
+                    <div className="mt-1">
+                      <AudiencePicker value={visibility} onChange={setVisibility} />
+                    </div>
                   </div>
                 </div>
               )}

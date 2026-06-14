@@ -20,6 +20,7 @@ export interface PublicPost {
   id: string;
   type: "IMAGE" | "VIDEO" | "REEL" | "TEXT";
   status: "PROCESSING" | "READY" | "FAILED";
+  visibility: "PUBLIC" | "FOLLOWERS" | "PRIVATE";
   caption: string | null;
   mediaUrl: string | null;
   posterUrl: string | null;
@@ -70,6 +71,7 @@ interface RawPost {
   id: string;
   type: string;
   status: string;
+  visibility: string;
   caption: string | null;
   mediaUrl: string | null;
   posterUrl: string | null;
@@ -92,6 +94,7 @@ export function serializePost(p: RawPost, viewerId?: string | null): PublicPost 
     id: p.id,
     type: p.type as PublicPost["type"],
     status: p.status as PublicPost["status"],
+    visibility: p.visibility as PublicPost["visibility"],
     caption: p.caption,
     mediaUrl: p.mediaUrl,
     posterUrl: p.posterUrl,

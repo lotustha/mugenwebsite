@@ -73,6 +73,8 @@ export default function PostDetailPage() {
             post={post}
             priority
             onAuthRequired={() => router.push(`/auth/login?next=${encodeURIComponent(pathname)}`)}
+            onUpdated={(p) => setPost(p)}
+            onDeleted={() => router.push("/social")}
           />
           <CommentThread postId={post.id} postAuthor={post.author} commentsCount={post.commentsCount} />
         </>

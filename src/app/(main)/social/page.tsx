@@ -207,7 +207,14 @@ export default function SocialFeedPage() {
         <>
           <div className="flex flex-col gap-4">
             {posts.map((post, i) => (
-              <PostCard key={post.id} post={post} priority={i === 0} onAuthRequired={requireAuth} />
+              <PostCard
+                key={post.id}
+                post={post}
+                priority={i === 0}
+                onAuthRequired={requireAuth}
+                onUpdated={(p) => setPosts((prev) => prev.map((x) => (x.id === p.id ? p : x)))}
+                onDeleted={(id) => setPosts((prev) => prev.filter((x) => x.id !== id))}
+              />
             ))}
           </div>
 

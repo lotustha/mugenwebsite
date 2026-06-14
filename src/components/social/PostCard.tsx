@@ -1,15 +1,17 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { AnimatePresence, motion } from "framer-motion";
-import { toggleLike, type SocialPost } from "@/lib/social-client";
+import { deletePost, postShareUrl, toggleLike, type SocialPost } from "@/lib/social-client";
 import { useCurrentUser } from "./SocialProvider";
 import UserAvatar from "./UserAvatar";
 import RelativeTime from "./RelativeTime";
 import LikeButton from "./LikeButton";
 import ShareSheet from "./ShareSheet";
 import VerifiedBadge from "./VerifiedBadge";
+import EditPostModal from "./EditPostModal";
+import { AudienceIcon } from "./AudiencePicker";
 
 /**
  * Instagram-style feed post card: avatar header → media (double-tap to like) →
@@ -19,14 +21,23 @@ import VerifiedBadge from "./VerifiedBadge";
 export default function PostCard({
   post,
   onAuthRequired,
+  onUpdated,
+  onDeleted,
   priority = false,
 }: {
   post: SocialPost;
   onAuthRequired?: () => void;
+  onUpdated?: (post: SocialPost) => void;
+  onDeleted?: (id: string) => void;
   priority?: boolean;
 }) {
   const { user } = useCurrentUser();
   const [shareOpen, setShareOpen] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const menuRef = useRef<HTMLDivElement | null>(null);
+  const canManage = !!user && (user.id === post.author.id || user.role === "ADMIN");
   // Like state is lifted here so the heart, the "N likes" line and double-tap stay in sync.
   const [liked, setLiked] = useState(post.liked);
   const [likeCount, setLikeCount] = useState(post.likesCount);
@@ -70,6 +81,38 @@ export default function PostCard({
     if (!liked) void doToggle(); // IG double-tap only ever likes, never unlikes
   }
 
+  // Close the ⋯ menu on outside click.
+  useEffect(() => {
+    if (!menuOpen) return;
+    const onDoc = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setMenuOpen(false);
+    };
+    document.addEventListener("mousedown", onDoc);
+    return () => document.removeEventListener("mousedown", onDoc);
+  }, [menuOpen]);
+
+  async function copyLink() {
+    setMenuOpen(false);
+    try {
+      await navigator.clipboard.writeText(postShareUrl(post.id));
+    } catch {
+      /* ignore */
+    }
+  }
+
+  async function handleDelete() {
+    setMenuOpen(false);
+    if (deleting) return;
+    if (typeof window !== "undefined" && !window.confirm("Delete this post? This can’t be undone.")) return;
+    setDeleting(true);
+    try {
+      await deletePost(post.id);
+      onDeleted?.(post.id);
+    } catch {
+      setDeleting(false);
+    }
+  }
+
   return (
     <motion.article
       initial={{ opacity: 0, y: 16 }}
@@ -98,6 +141,63 @@ export default function PostCard({
             #{media.animeTag}
           </span>
         )}
+
+        {/* ⋯ options menu */}
+        <div ref={menuRef} className="relative shrink-0">
+          <button
+            type="button"
+            onClick={() => setMenuOpen((o) => !o)}
+            aria-label="Post options"
+            className="grid h-8 w-8 place-items-center rounded-full text-text-main/50 transition-colors hover:bg-white/10 hover:text-text-main"
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+              <circle cx="5" cy="12" r="2" /><circle cx="12" cy="12" r="2" /><circle cx="19" cy="12" r="2" />
+            </svg>
+          </button>
+          {menuOpen && (
+            <div className="glass-dark absolute right-0 top-full z-30 mt-1 w-44 overflow-hidden rounded-2xl border border-outline-variant p-1.5 shadow-xl">
+              {canManage && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMenuOpen(false);
+                      setEditing(true);
+                    }}
+                    className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left text-sm text-text-main transition-colors hover:bg-white/5"
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+                      <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                      <path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                    </svg>
+                    Edit post
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleDelete}
+                    className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left text-sm text-red-300 transition-colors hover:bg-red-500/10"
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+                      <path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m2 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" />
+                    </svg>
+                    Delete post
+                  </button>
+                </>
+              )}
+              <button
+                type="button"
+                onClick={copyLink}
+                className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left text-sm text-text-main transition-colors hover:bg-white/5"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+                  <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+                  <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+                </svg>
+                Copy link
+              </button>
+            </div>
+          )}
+        </div>
       </header>
 
       {/* Text-only status: caption is the body. */}
@@ -197,12 +297,25 @@ export default function PostCard({
         </Link>
       )}
 
-      {/* Timestamp */}
-      <div className="px-3.5 pb-3.5 pt-1.5 text-[11px] uppercase tracking-wide text-text-main/40">
+      {/* Timestamp + audience */}
+      <div className="flex items-center gap-1.5 px-3.5 pb-3.5 pt-1.5 text-[11px] uppercase tracking-wide text-text-main/40">
         <RelativeTime iso={post.createdAt} />
+        <span aria-hidden>·</span>
+        <AudienceIcon visibility={post.visibility} size={12} />
       </div>
 
       <ShareSheet postId={post.id} open={shareOpen} onClose={() => setShareOpen(false)} />
+      {editing && (
+        <EditPostModal
+          post={post}
+          open={editing}
+          onClose={() => setEditing(false)}
+          onUpdated={(p) => {
+            onUpdated?.(p);
+            setEditing(false);
+          }}
+        />
+      )}
     </motion.article>
   );
 }

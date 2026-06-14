@@ -34,6 +34,15 @@ export async function GET(req: Request, { params }: Ctx) {
       }))
     : false;
 
+  // Audience filter for visitors: owner sees all; a follower also sees FOLLOWERS
+  // posts; everyone else only PUBLIC.
+  const isSelf = viewer?.id === user.id;
+  const visFilter = isSelf
+    ? {}
+    : isFollowing
+      ? { visibility: { in: ["PUBLIC", "FOLLOWERS"] as ("PUBLIC" | "FOLLOWERS")[] } }
+      : { visibility: "PUBLIC" as const };
+
   // Posts tab data.
   let items: unknown[] = [];
   let nextCursor: string | null = null;
@@ -42,6 +51,7 @@ export async function GET(req: Request, { params }: Ctx) {
       where: {
         authorId: user.id,
         status: "READY",
+        ...visFilter,
         ...(tab === "reels" ? { type: "REEL" } : {}),
       },
       orderBy: { createdAt: "desc" },

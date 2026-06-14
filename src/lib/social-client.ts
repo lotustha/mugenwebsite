@@ -10,10 +10,13 @@ export interface SocialUser {
   online: boolean;
 }
 
+export type PostVisibility = "PUBLIC" | "FOLLOWERS" | "PRIVATE";
+
 export interface SocialPost {
   id: string;
   type: "IMAGE" | "VIDEO" | "REEL" | "TEXT";
   status: "PROCESSING" | "READY" | "FAILED";
+  visibility: PostVisibility;
   caption: string | null;
   mediaUrl: string | null;
   posterUrl: string | null;
@@ -111,6 +114,24 @@ export async function postComment(postId: string, content: string, parentId?: st
 
 export async function createPost(form: FormData): Promise<{ post: SocialPost }> {
   return json(await fetch("/api/social/posts", { method: "POST", body: form }));
+}
+
+export async function updatePost(
+  id: string,
+  data: { caption?: string; animeTag?: string | null; visibility?: PostVisibility },
+): Promise<SocialPost> {
+  const res = await json<{ post: SocialPost }>(
+    await fetch(`/api/social/posts/${id}`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(data),
+    }),
+  );
+  return res.post;
+}
+
+export async function deletePost(id: string): Promise<void> {
+  await json(await fetch(`/api/social/posts/${id}`, { method: "DELETE" }));
 }
 
 export async function repost(id: string, caption?: string): Promise<{ post: SocialPost }> {

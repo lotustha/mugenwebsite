@@ -41,10 +41,18 @@ export async function GET(req: Request) {
     params.push(animeTag);
     conds.push(`lower(anime_tag) = lower($${params.length})`);
   }
+  // Audience filter: PUBLIC for everyone; for a signed-in viewer also their own
+  // posts and FOLLOWERS posts by authors they follow. PRIVATE never appears here.
   let followBoost = "0";
   if (viewer) {
     params.push(viewer.id);
-    followBoost = `(CASE WHEN author_id IN (SELECT following_id FROM follows WHERE follower_id = $${params.length}::uuid) THEN 5 ELSE 0 END)`;
+    const vIdx = params.length;
+    conds.push(
+      `(visibility = 'PUBLIC' OR author_id = $${vIdx}::uuid OR (visibility = 'FOLLOWERS' AND author_id IN (SELECT following_id FROM follows WHERE follower_id = $${vIdx}::uuid)))`,
+    );
+    followBoost = `(CASE WHEN author_id IN (SELECT following_id FROM follows WHERE follower_id = $${vIdx}::uuid) THEN 5 ELSE 0 END)`;
+  } else {
+    conds.push("visibility = 'PUBLIC'");
   }
   params.push(limit + 1);
   const limIdx = params.length;
@@ -101,6 +109,11 @@ export async function POST(req: Request) {
   const file = form.get("file");
   const caption = (form.get("caption") as string | null)?.slice(0, 2200) || null;
   const animeTag = (form.get("animeTag") as string | null)?.trim().slice(0, 80) || null;
+  const visRaw = (form.get("visibility") as string | null) || "PUBLIC";
+  const visibility = (["PUBLIC", "FOLLOWERS", "PRIVATE"].includes(visRaw) ? visRaw : "PUBLIC") as
+    | "PUBLIC"
+    | "FOLLOWERS"
+    | "PRIVATE";
 
   // Text-only status post: no media, but a caption is required.
   if (!(file instanceof File)) {
@@ -108,7 +121,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Write something or add media" }, { status: 400 });
     }
     const post = await prisma.socialPost.create({
-      data: { authorId: user.id, type: "TEXT", status: "READY", caption, animeTag },
+      data: { authorId: user.id, type: "TEXT", status: "READY", visibility, caption, animeTag },
       include: { author: { select: userSelect } },
     });
     return NextResponse.json(withAbsoluteMedia({ post: serializePost(post as never, user.id) }), { status: 201 });
@@ -134,6 +147,7 @@ export async function POST(req: Request) {
         authorId: user.id,
         type: "IMAGE",
         status: "READY",
+        visibility,
         caption,
         animeTag,
         mediaUrl: saved.url,
@@ -149,6 +163,7 @@ export async function POST(req: Request) {
       authorId: user.id,
       type: "REEL",
       status: "PROCESSING",
+      visibility,
       caption,
       animeTag,
       mediaUrl: saved.url, // original plays until transcode swaps it

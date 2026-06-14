@@ -352,12 +352,19 @@ enum SocialPostStatus {
   FAILED
 }
 
+enum SocialPostVisibility {
+  PUBLIC    // anyone
+  FOLLOWERS // author + people who follow the author
+  PRIVATE   // author only
+}
+
 model SocialPost {
   id          String           @id @default(uuid()) @db.Uuid
   authorId    String           @map("author_id") @db.Uuid
   author      User             @relation(fields: [authorId], references: [id], onDelete: Cascade)
   type        SocialPostType
   status      SocialPostStatus @default(READY) // IMAGE posts ready immediately; video starts PROCESSING
+  visibility  SocialPostVisibility @default(PUBLIC) // audience: who can see this post
   caption     String?          @db.Text
   mediaUrl    String?          @map("media_url")   // image or transcoded video (relative /uploads/*)
   posterUrl   String?          @map("poster_url")  // video thumbnail from ffmpeg
