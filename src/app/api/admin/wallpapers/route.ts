@@ -120,15 +120,16 @@ export async function POST(request: Request) {
     }
 
     // Fire-and-forget push notification
-    import("@/lib/push-notifications").then(({ sendWallpaperNotification }) =>
-      sendWallpaperNotification({
+    import("@/lib/push-notifications").then(async ({ sendWallpaperNotification }) => {
+      const { absolutizeUrl } = await import("@/lib/url");
+      return sendWallpaperNotification({
         id:          wallpaper.id,
         title:       wallpaper.title,
-        fileUrl:     wallpaper.fileUrl,
+        fileUrl:     absolutizeUrl(wallpaper.fileUrl) ?? wallpaper.fileUrl,
         type:        wallpaper.type,
         description: wallpaper.description ?? null,
-      }).catch(() => {})
-    );
+      });
+    }).catch(() => {});
 
     // Announce to the social feed (official account) when flagged.
     if (announce) {

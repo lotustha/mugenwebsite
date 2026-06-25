@@ -294,6 +294,25 @@ model FcmToken {
   @@map("fcm_tokens")
 }
 
+// ─── New-anime-episode notification dedup ────────────────────────────────────
+// One row per anime tracked from the anizen new-releases / recent-episodes feed.
+// We notify when `lastSub` (or `lastDub`) grows past the stored value, so each
+// episode fires at most one push. First encounter seeds silently (see
+// episode-notifier.ts) to avoid back-filling pushes for the whole catalogue.
+
+model AnimeEpisodeSeen {
+  id         String   @id @default(uuid()) @db.Uuid
+  animeId    String   @unique @map("anime_id") // anizen anime id, e.g. "one-piece-odmau"
+  title      String
+  image      String?
+  lastSub    Int      @default(0) @map("last_sub")
+  lastDub    Int      @default(0) @map("last_dub")
+  notifiedAt DateTime @default(now()) @map("notified_at")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@map("anime_episode_seen")
+}
+
 // ─── Auth.js OAuth adapter tables ────────────────────────────────────────────
 // PrismaAdapter persists Google sign-ins into the User table. Session strategy
 // stays "jwt" (Credentials provider requires it), so the Session model below is

@@ -110,6 +110,54 @@ export async function sendWallpaperNotification(wallpaper: {
   }
 }
 
+// ─── New-episode notification ───────────────────────────────────────────────
+export async function sendEpisodeNotification(ep: {
+  animeId: string;
+  title: string;
+  episode: number;
+  audio: "sub" | "dub";
+  image?: string | null;
+}): Promise<NotifResult> {
+  if (!admin.apps.length) return { success: false, error: "Firebase not configured" };
+
+  const audioLabel = ep.audio === "dub" ? "Dub" : "Sub";
+  try {
+    const messageId = await admin.messaging().send({
+      topic: "new_episodes",
+      notification: {
+        title: "🆕 New Episode",
+        body:  `${ep.title} — Episode ${ep.episode} (${audioLabel}) is out`,
+        ...(ep.image ? { imageUrl: ep.image } : {}),
+      },
+      data: {
+        type:    "episode",
+        id:      ep.animeId,
+        title:   ep.title,
+        episode: String(ep.episode),
+        audio:   ep.audio,
+        image:   ep.image ?? "",
+        // Deep link: mugenstream://anime/{animeId}
+        deepLink: `mugenstream://anime/${ep.animeId}`,
+        clickAction: "FLUTTER_NOTIFICATION_CLICK",
+      },
+      android: {
+        priority: "high",
+        notification: {
+          channelId: "episodes", // matches the app's existing local "episodes" channel
+          ...(ep.image ? { imageUrl: ep.image } : {}),
+          clickAction: "FLUTTER_NOTIFICATION_CLICK",
+        },
+      },
+      apns: {
+        payload: { aps: { contentAvailable: true, sound: "default" } },
+      },
+    });
+    return { success: true, messageId };
+  } catch (e) {
+    return { success: false, error: e instanceof Error ? e.message : String(e) };
+  }
+}
+
 // ─── Generic broadcast (admin manual send) ──────────────────────────────────
 export async function sendBroadcast(opts: {
   topic: string;

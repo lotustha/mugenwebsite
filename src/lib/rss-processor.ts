@@ -404,15 +404,16 @@ async function processItem(
 
   // Fire-and-forget push notification (only for auto-published posts)
   if (autoPublish) {
-    import("./push-notifications").then(({ sendPostNotification }) =>
-      sendPostNotification({
+    import("./push-notifications").then(async ({ sendPostNotification }) => {
+      const { absolutizeUrl } = await import("./url");
+      return sendPostNotification({
         id:            post.id,
         slug:          post.slug,
         title:         post.title,
         summary:       post.summary ?? null,
-        featuredImage: post.featuredImage ?? null,
-      }).catch(() => {})
-    );
+        featuredImage: absolutizeUrl(post.featuredImage) ?? null,
+      });
+    }).catch(() => {});
   }
 
   return { status: "ok", postId: post.id };

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/auth-helpers";
+import { absolutizeUrl } from "@/lib/url";
 import {
   extractPinMedia,
   extractWithHeadless,
@@ -141,6 +142,8 @@ export async function POST(request: Request) {
   const tagIds = await resolveTagIds(tagNames);
 
   const results: ImportResult[] = [];
+  let notified = 0;
+  const NOTIFY_CAP = 10; // bulk imports shouldn't fire a push per pin
 
   for (const pin of pins) {
     try {
@@ -158,6 +161,19 @@ export async function POST(request: Request) {
         },
         select: { id: true, title: true, fileUrl: true, type: true },
       });
+
+      // Fire-and-forget push for newly added wallpapers (capped per batch).
+      if (notified < NOTIFY_CAP) {
+        notified++;
+        import("@/lib/push-notifications").then(({ sendWallpaperNotification }) =>
+          sendWallpaperNotification({
+            id:          wallpaper.id,
+            title:       wallpaper.title,
+            fileUrl:     absolutizeUrl(wallpaper.fileUrl) ?? wallpaper.fileUrl,
+            type:        wallpaper.type,
+          }).catch(() => {})
+        );
+      }
 
       results.push({ pinId: pin.pinId, status: "ok", wallpaper });
     } catch (e) {

@@ -10,11 +10,43 @@ export function startCronScheduler() {
   if (started) return; // guard against hot-reload re-registration in dev
   started = true;
 
-  console.log("[cron] Background RSS scheduler initialised — polling every 60 s");
+  console.log("[cron] Background scheduler initialised — RSS every 60 s, episodes every 15 min");
 
   // Small startup delay so the DB connection pool is warm before first tick
   setTimeout(tick, 15_000);
   setInterval(tick, 60_000);
+
+  // New-anime-episode notifications poll the anizen feeds less aggressively.
+  setTimeout(episodeTick, 30_000);
+  setInterval(episodeTick, 15 * 60_000);
+}
+
+async function episodeTick() {
+  try {
+    const { prisma } = await import("@/lib/prisma");
+
+    const enabledRow = await prisma.systemSetting.findUnique({ where: { key: "cron_enabled" } });
+    if (enabledRow?.value !== "true") return;
+
+    const { runEpisodeNotifier } = await import("@/lib/episode-notifier");
+    const res = await runEpisodeNotifier();
+
+    if (res.seeded) {
+      console.log(`[cron] Episode notifier seeded ${res.scanned} anime (silent baseline)`);
+    } else if (res.sent > 0 || res.errors > 0) {
+      console.log(`[cron] Episode notifier: ${res.sent} pushes sent, ${res.errors} errors (${res.scanned} scanned)`);
+    }
+
+    if (res.sent > 0 || res.seeded) {
+      await prisma.systemSetting.upsert({
+        where: { key: "episode_notifier_last_run" },
+        create: { key: "episode_notifier_last_run", value: new Date().toISOString() },
+        update: { value: new Date().toISOString() },
+      });
+    }
+  } catch (err) {
+    console.error("[cron] Episode tick error:", err instanceof Error ? err.message : err);
+  }
 }
 
 async function tick() {
