@@ -110,6 +110,24 @@ export async function sendWallpaperNotification(wallpaper: {
   }
 }
 
+// Active provider, from ANIME_API_BASE (e.g. ".../anime/animelok" → "animelok").
+// Episode topics are scoped to it so app users only get alerts for the API they
+// currently have selected.
+const PUSH_PROVIDER =
+  (process.env.ANIME_API_BASE || "").split("/").filter(Boolean).pop() || "animelok";
+
+// Per-anime, provider-scoped FCM topic. MUST match the Flutter app's
+// PushService.animeTopic: lowercase → non-alphanumerics to `_` → collapse/trim
+// `_` → cap 180 → prefix `anime_<provider>_`.
+function animeTopic(name: string, provider: string): string {
+  let s = name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+  if (s.length > 180) s = s.slice(0, 180);
+  return `anime_${provider}_${s}`;
+}
+
 // ─── New-episode notification ───────────────────────────────────────────────
 export async function sendEpisodeNotification(ep: {
   animeId: string;
@@ -122,8 +140,11 @@ export async function sendEpisodeNotification(ep: {
 
   const audioLabel = ep.audio === "dub" ? "Dub" : "Sub";
   try {
+    // Deliver to "all" subscribers (new_episodes) AND favouriters of this anime
+    // (anime_<name>) in a single send — a device is in only one group, so no
+    // duplicate. (FCM conditions allow up to 5 topics.)
     const messageId = await admin.messaging().send({
-      topic: "new_episodes",
+      condition: `'new_episodes_${PUSH_PROVIDER}' in topics || '${animeTopic(ep.title, PUSH_PROVIDER)}' in topics`,
       notification: {
         title: "🆕 New Episode",
         body:  `${ep.title} — Episode ${ep.episode} (${audioLabel}) is out`,
