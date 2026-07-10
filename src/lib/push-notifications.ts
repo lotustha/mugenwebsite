@@ -144,7 +144,7 @@ export async function sendEpisodeNotification(ep: {
     // (anime_<name>) in a single send — a device is in only one group, so no
     // duplicate. (FCM conditions allow up to 5 topics.)
     const messageId = await admin.messaging().send({
-      condition: `'new_episodes_${PUSH_PROVIDER}' in topics || '${animeTopic(ep.title, PUSH_PROVIDER)}' in topics`,
+      condition: `'new_episodes' in topics || 'new_episodes_${PUSH_PROVIDER}' in topics || '${animeTopic(ep.title, PUSH_PROVIDER)}' in topics`,
       notification: {
         title: "🆕 New Episode",
         body:  `${ep.title} — Episode ${ep.episode} (${audioLabel}) is out`,
