@@ -21,6 +21,48 @@ import { sendEpisodeNotification } from "./push-notifications";
 const SEED_KEY = "episode_notifier_seeded";
 const MAX_SENDS_PER_RUN = 25; // safety cap so a feed surge can't flood every device
 
+// Shared secret for the API's POST /admin/cache/purge endpoint. When a new
+// episode is detected we bust that anime's cached `info` payload so the app
+// shows the new episode immediately instead of waiting out the API's 3-day TTL.
+const CACHE_ADMIN_TOKEN = process.env.CACHE_ADMIN_TOKEN || "";
+
+/**
+ * Derive the API root + provider from ANIME_API_BASE
+ * (e.g. https://api.mugenstream.fun/anime/anikoto → root + "anikoto").
+ */
+function purgeTarget(base: string): { url: string; provider: string } | null {
+  try {
+    const u = new URL(base);
+    const provider = u.pathname.split("/").filter(Boolean).pop() || "";
+    if (!provider) return null;
+    return { url: `${u.origin}/admin/cache/purge`, provider };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Best-effort: tell the API to drop `<provider>:info:<animeId>` so the next
+ * /info request re-scrapes and picks up the new episode. Never throws — if the
+ * purge fails the cache still self-heals when its TTL expires.
+ */
+async function purgeInfoCache(base: string, animeId: string): Promise<void> {
+  if (!CACHE_ADMIN_TOKEN) return; // endpoint/secret not configured → skip
+  const target = purgeTarget(base);
+  if (!target) return;
+  const key = `${target.provider}:info:${animeId}`;
+  try {
+    await fetchWithTimeout(`${target.url}?key=${encodeURIComponent(key)}`, {
+      method: "POST",
+      timeout: 8000,
+      cache: "no-store",
+      headers: { "x-admin-token": CACHE_ADMIN_TOKEN },
+    });
+  } catch {
+    // ignore — TTL expiry is the fallback
+  }
+}
+
 type FeedItem = {
   id: string;
   title: string;
@@ -120,10 +162,13 @@ export async function runEpisodeNotifier(opts?: { force?: boolean }): Promise<Ep
       });
       // During the initial seed we stay silent. After seeding, a brand-new anime
       // is a genuine new release → notify on its latest sub episode.
-      if (!isSeed && sub > 0 && sent < MAX_SENDS_PER_RUN) {
-        newAnime++;
-        const r = await sendEpisodeNotification({ animeId: item.id, title, episode: sub, audio: "sub", image });
-        r.success ? sent++ : errors++;
+      if (!isSeed && (sub > 0 || dub > 0)) {
+        void purgeInfoCache(base, item.id);
+        if (sub > 0 && sent < MAX_SENDS_PER_RUN) {
+          newAnime++;
+          const r = await sendEpisodeNotification({ animeId: item.id, title, episode: sub, audio: "sub", image });
+          r.success ? sent++ : errors++;
+        }
       }
       continue;
     }
@@ -134,6 +179,10 @@ export async function runEpisodeNotifier(opts?: { force?: boolean }): Promise<Ep
     const subGrew = sub > row.lastSub;
     const dubGrew = dub > row.lastDub;
     if (!subGrew && !dubGrew) continue;
+
+    // New episode confirmed → bust the API's cached info for this anime so the
+    // app shows it right away (independent of the FCM send cap below).
+    void purgeInfoCache(base, item.id);
 
     if (subGrew && sent < MAX_SENDS_PER_RUN) {
       const r = await sendEpisodeNotification({ animeId: item.id, title, episode: sub, audio: "sub", image });
