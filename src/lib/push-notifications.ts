@@ -143,8 +143,10 @@ export async function sendEpisodeNotification(ep: {
     // Deliver to "all" subscribers (new_episodes) AND favouriters of this anime
     // (anime_<name>) in a single send — a device is in only one group, so no
     // duplicate. (FCM conditions allow up to 5 topics.)
+    // `inapp_com_mugenanime_app` = all pandora_anime installs (that app never
+    // subscribes to new_episodes*, so this is the only way it receives alerts).
     const messageId = await admin.messaging().send({
-      condition: `'new_episodes' in topics || 'new_episodes_${PUSH_PROVIDER}' in topics || '${animeTopic(ep.title, PUSH_PROVIDER)}' in topics`,
+      condition: `'new_episodes' in topics || 'new_episodes_${PUSH_PROVIDER}' in topics || 'inapp_com_mugenanime_app' in topics || '${animeTopic(ep.title, PUSH_PROVIDER)}' in topics`,
       notification: {
         title: "🆕 New Episode",
         body:  `${ep.title} — Episode ${ep.episode} (${audioLabel}) is out`,
