@@ -1330,3 +1330,75 @@ Admin writes message on website → POST /api/admin/inapp-messages
   → User taps CTA → launchUrl / router.push
   → Banner auto-dismisses after 6 s (or user closes it)
 ```
+
+---
+
+## 8. Apps Endpoints (App Catalog)
+
+Public catalog of every app listed on the website (the `/apps` page). Useful for
+"More Apps" screens, cross-promotion, and resolving the **app slug** used by the
+in-app messages API (see `IN_APP_MESSAGES_FLUTTER.md`).
+
+### List All Apps
+
+```
+GET https://mugenstream.fun/api/apps
+```
+
+Returns an array of all apps, newest first. ⚠️ This list is **not** filtered by
+`published` — check the `published` flag client-side before displaying.
+
+```json
+[
+  {
+    "id": "uuid",
+    "slug": "noon-anime-ml",
+    "name": "Noon Anime Multi Language",
+    "tagline": "…",
+    "description": "…",
+    "category": "Entertainment",
+    "version": "1.2.0",
+    "size": "25 MB",
+    "packageName": "com.noonanime.watchhindi",
+    "iconUrl": "/uploads/appsicons/….webp",
+    "bannerUrl": "/uploads/appsbanners/….webp",
+    "videoUrl": "/uploads/appsvideos/….mp4",
+    "privacyPolicy": "…",
+    "published": true,
+    "featured": false,
+    "createdAt": "…", "updatedAt": "…",
+    "links":       [{ "platform": "playstore", "url": "https://…" }],
+    "screenshots": [{ "url": "/uploads/…", "caption": null, "order": 0 }],
+    "faqs":        [{ "question": "…", "answer": "…", "order": 0 }]
+  }
+]
+```
+
+Media URLs (`iconUrl`, `bannerUrl`, `videoUrl`, screenshot `url`) are
+**site-relative** — prepend `https://mugenstream.fun` in the app.
+
+### Single App
+
+```
+GET https://mugenstream.fun/api/apps/{idOrSlug}
+```
+
+Accepts a UUID **or** a slug (e.g. `/api/apps/noon-anime-ml`). Unlike the list
+endpoint, this one only returns **published** apps; unpublished → `404`.
+
+### Current App Slugs (as of 2026-07-17)
+
+| Slug | App | Package |
+|---|---|---|
+| `mugen-anime` | Mugen Anime | `com.mugenstream.anime` |
+| `noon-anime` | Noon Anime | `com.noonanime.watch` |
+| `noon-anime-ml` | Noon Anime Multi Language (Hindi) | `com.noonanime.watchhindi` |
+| `noonflix` | Noonflix | `com.lynoon.movie` |
+| `wordpuzzel` | Word Bloom | `com.allthemyth.word_puzzle` |
+| `guitar-tuner` | Guitar Tuner | `com.guitartuner.pro` |
+| `tappy-dash` | Tappy Dash | `com.mugen.tappydash` |
+| `nepse-hub` | NEPSE Hub | `com.nepse.nepse` |
+
+> The slug — not the package name — is what the in-app messages API expects in
+> its `app` query parameter. Fetch this endpoint (or check `/api/apps` in a
+> browser) rather than trusting this table to stay current.
