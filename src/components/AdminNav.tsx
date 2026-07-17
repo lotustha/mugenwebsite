@@ -58,6 +58,11 @@ const NAV_SECTIONS = [
         label: "RSS Import",
         icon: <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="5" cy="19" r="2"/><path strokeLinecap="round" d="M5 11a8 8 0 018 8"/><path strokeLinecap="round" d="M5 6a13 13 0 0113 13"/></svg>,
       },
+      {
+        href: "/admin/wallpaper-sources",
+        label: "Wallpaper Auto",
+        icon: <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path strokeLinecap="round" strokeLinejoin="round" d="M21 15l-5-5L9 17"/><path strokeLinecap="round" strokeLinejoin="round" d="M12 21v-4m0 0l-1.5 1.5M12 17l1.5 1.5"/></svg>,
+      },
     ],
   },
   {

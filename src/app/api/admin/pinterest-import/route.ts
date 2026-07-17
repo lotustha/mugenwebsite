@@ -2,13 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/auth-helpers";
 import { absolutizeUrl } from "@/lib/url";
-import {
-  extractPinMedia,
-  extractWithHeadless,
-  downloadPinMedia,
-  downloadHlsToMp4,
-  type PinMedia,
-} from "@/lib/pinterest";
+import { extractBestMedia, downloadBestMedia } from "@/lib/pinterest";
 
 interface ImportPin {
   pinId: string;
@@ -55,58 +49,6 @@ async function resolveTagIds(tagNames: string[]): Promise<string[]> {
   return ids;
 }
 
-/** Run the lightweight scrape, then headless if needed. Throws on total failure. */
-async function extract(pinUrl: string): Promise<PinMedia> {
-  let media: PinMedia | null = null;
-  try {
-    media = await extractPinMedia(pinUrl);
-  } catch {
-    media = null;
-  }
-
-  // We have ANY usable media URL — keep going. Headless fallback only fires
-  // if we got nothing at all from the lightweight scrape.
-  if (media && (media.videoUrl || media.hlsUrl || media.imageUrl)) return media;
-
-  const headless = await extractWithHeadless(pinUrl);
-  if (headless && (headless.videoUrl || headless.hlsUrl || headless.imageUrl)) return headless;
-
-  throw new Error("No media found (HTML scrape and headless both failed)");
-}
-
-/**
- * Download whichever media URL the pin gave us, in priority order:
- *   1. Direct MP4 (fastest, single fetch)
- *   2. HLS via ffmpeg (works for "duplo-hls-video" pins; needs ffmpeg)
- *   3. Static thumbnail image (last resort if both video paths failed)
- */
-async function downloadFromMedia(media: PinMedia): Promise<{ url: string; actualType: "IMAGE" | "VIDEO" }> {
-  // 1. Direct MP4
-  if (media.videoUrl && !media.videoUrl.includes(".m3u8")) {
-    return await downloadPinMedia(media.videoUrl, true);
-  }
-
-  // 2. HLS via ffmpeg
-  if (media.hlsUrl) {
-    try {
-      const { url } = await downloadHlsToMp4(media.hlsUrl);
-      return { url, actualType: "VIDEO" };
-    } catch (e) {
-      // ffmpeg missing or remux failed — fall through to thumbnail
-      if (!media.imageUrl) {
-        throw e instanceof Error ? e : new Error("HLS download failed");
-      }
-    }
-  }
-
-  // 3. Image fallback
-  if (media.imageUrl) {
-    return await downloadPinMedia(media.imageUrl, false);
-  }
-
-  throw new Error("No downloadable media URL");
-}
-
 // POST /api/admin/pinterest-import
 // Body: { pins: ImportPin[], categoryId?: string, tagNames?: string[] }
 // Returns: { results: ImportResult[] }
@@ -147,8 +89,8 @@ export async function POST(request: Request) {
 
   for (const pin of pins) {
     try {
-      const media = await extract(pin.pinUrl);
-      const { url: fileUrl, actualType } = await downloadFromMedia(media);
+      const media = await extractBestMedia(pin.pinUrl);
+      const { url: fileUrl, actualType } = await downloadBestMedia(media);
 
       const wallpaper = await prisma.wallpaper.create({
         data: {

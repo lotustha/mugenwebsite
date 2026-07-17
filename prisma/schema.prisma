@@ -164,6 +164,9 @@ model Wallpaper {
   uploaderId     String              @map("uploader_id") @db.Uuid
   uploader       User                @relation(fields: [uploaderId], references: [id])
   downloadsCount Int                 @default(0) @map("downloads_count")
+  // Pinterest pinId for auto-imported wallpapers — dedup key so a source's
+  // scheduled re-runs skip pins already imported. Null for manual uploads.
+  sourceId       String?             @unique @map("source_id")
   createdAt      DateTime            @default(now()) @map("created_at")
   categories     WallpaperCategory[]
   tags           WallpaperTag[]
@@ -177,13 +180,36 @@ enum WallpaperType {
 }
 
 model WallpaperCategory {
-  id         String      @id @default(uuid()) @db.Uuid
-  name       String      @unique
-  slug       String      @unique
+  id         String            @id @default(uuid()) @db.Uuid
+  name       String            @unique
+  slug       String            @unique
   wallpapers Wallpaper[]
-  createdAt  DateTime    @default(now()) @map("created_at")
+  sources    WallpaperSource[]
+  createdAt  DateTime          @default(now()) @map("created_at")
 
   @@map("wallpaper_categories")
+}
+
+// Saved Pinterest search that the background scheduler runs on a schedule to
+// auto-import anime wallpapers. Mirrors RssFeed (news) for the wallpaper side.
+model WallpaperSource {
+  id              String             @id @default(uuid()) @db.Uuid
+  name            String
+  query           String             // Pinterest search query, e.g. "anime 4k phone wallpaper"
+  mediaType       String             @default("image") @map("media_type") // image | video | both
+  maxItems        Int                @default(8)   @map("max_items")        // how many to import per run
+  scheduleMinutes Int                @default(720) @map("schedule_minutes") // 360 | 720 | 1440 …
+  isActive        Boolean            @default(true) @map("is_active")
+  notify          Boolean            @default(false)                        // push when new wallpapers land
+  categoryId      String?            @map("category_id") @db.Uuid
+  category        WallpaperCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  tags            String?            // comma-separated tag names applied to every import
+  lastRunAt       DateTime?          @map("last_run_at")
+  totalImported   Int                @default(0) @map("total_imported")
+  createdAt       DateTime           @default(now()) @map("created_at")
+  updatedAt       DateTime           @updatedAt @map("updated_at")
+
+  @@map("wallpaper_sources")
 }
 
 model WallpaperTag {

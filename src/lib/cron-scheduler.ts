@@ -10,7 +10,7 @@ export function startCronScheduler() {
   if (started) return; // guard against hot-reload re-registration in dev
   started = true;
 
-  console.log("[cron] Background scheduler initialised — RSS every 60 s, episodes every 15 min");
+  console.log("[cron] Background scheduler initialised — RSS every 60 s, episodes every 15 min, wallpapers every 5 min");
 
   // Small startup delay so the DB connection pool is warm before first tick
   setTimeout(tick, 15_000);
@@ -19,6 +19,38 @@ export function startCronScheduler() {
   // New-anime-episode notifications poll the anizen feeds less aggressively.
   setTimeout(episodeTick, 30_000);
   setInterval(episodeTick, 15 * 60_000);
+
+  // Wallpaper auto-import (Pinterest). Checked every 5 min; each WallpaperSource
+  // self-throttles via its own scheduleMinutes (default twice a day).
+  setTimeout(wallpaperTick, 45_000);
+  setInterval(wallpaperTick, 5 * 60_000);
+}
+
+async function wallpaperTick() {
+  try {
+    const { prisma } = await import("@/lib/prisma");
+
+    // Shares the master switch with the RSS/episode scheduler.
+    const enabledRow = await prisma.systemSetting.findUnique({ where: { key: "cron_enabled" } });
+    if (enabledRow?.value !== "true") return;
+
+    const { processWallpaperSources } = await import("@/lib/wallpaper-importer");
+    const results = await processWallpaperSources({ force: false });
+
+    const created = results.reduce((n, r) => n + r.created, 0);
+    const errors = results.reduce((n, r) => n + r.errors, 0);
+
+    if (created > 0 || errors > 0) {
+      console.log(`[cron] Wallpaper tick: ${created} imported, ${errors} errors`);
+      await prisma.systemSetting.upsert({
+        where: { key: "wallpaper_last_run" },
+        create: { key: "wallpaper_last_run", value: new Date().toISOString() },
+        update: { value: new Date().toISOString() },
+      });
+    }
+  } catch (err) {
+    console.error("[cron] Wallpaper tick error:", err instanceof Error ? err.message : err);
+  }
 }
 
 async function episodeTick() {

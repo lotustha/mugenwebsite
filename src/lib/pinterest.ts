@@ -679,6 +679,51 @@ export async function downloadHlsToMp4(hlsUrl: string): Promise<{ url: string }>
   }
 }
 
+// ─── High-level extract + download (shared by import route + auto-importer) ──
+
+/**
+ * Resolve a pin's best media: lightweight HTML scrape first, headless Chromium
+ * fallback only if that yields nothing. Throws if no media URL is found.
+ */
+export async function extractBestMedia(pinUrl: string): Promise<PinMedia> {
+  let media: PinMedia | null = null;
+  try {
+    media = await extractPinMedia(pinUrl);
+  } catch {
+    media = null;
+  }
+  if (media && (media.videoUrl || media.hlsUrl || media.imageUrl)) return media;
+
+  const headless = await extractWithHeadless(pinUrl);
+  if (headless && (headless.videoUrl || headless.hlsUrl || headless.imageUrl)) return headless;
+
+  throw new Error("No media found (HTML scrape and headless both failed)");
+}
+
+/**
+ * Download whichever media URL the pin gave us, in priority order:
+ *   1. Direct MP4 (fastest)   2. HLS via ffmpeg   3. Static image (last resort)
+ */
+export async function downloadBestMedia(
+  media: PinMedia,
+): Promise<{ url: string; actualType: "IMAGE" | "VIDEO" }> {
+  if (media.videoUrl && !media.videoUrl.includes(".m3u8")) {
+    return await downloadPinMedia(media.videoUrl, true);
+  }
+  if (media.hlsUrl) {
+    try {
+      const { url } = await downloadHlsToMp4(media.hlsUrl);
+      return { url, actualType: "VIDEO" };
+    } catch (e) {
+      if (!media.imageUrl) throw e instanceof Error ? e : new Error("HLS download failed");
+    }
+  }
+  if (media.imageUrl) {
+    return await downloadPinMedia(media.imageUrl, false);
+  }
+  throw new Error("No downloadable media URL");
+}
+
 // ─── Download → local storage ────────────────────────────────────────────────
 
 export async function downloadPinMedia(
