@@ -250,4 +250,68 @@ body {
     border-top: 1px solid rgba(255, 255, 255, 0.07);
     margin: 2.5rem 0;
   }
+
+  /* Markdown docs (/docs/*) — tables + code on top of .article-body */
+  .doc-body p:first-of-type::first-letter {
+    float: none;
+    font-size: inherit;
+    font-weight: inherit;
+    margin: 0;
+    background: none;
+    -webkit-text-fill-color: currentColor;
+  }
+
+  .doc-body code {
+    font-size: 0.875em;
+    background: rgba(139, 92, 246, 0.12);
+    color: #d4bbff;
+    padding: 0.15em 0.4em;
+    border-radius: 0.3rem;
+  }
+
+  .doc-body pre {
+    background: rgba(9, 19, 40, 0.7);
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    border-radius: 0.75rem;
+    padding: 1rem 1.25rem;
+    margin: 0 0 1.5rem;
+    overflow-x: auto;
+  }
+
+  .doc-body pre code {
+    background: none;
+    color: rgba(222, 229, 255, 0.85);
+    padding: 0;
+    font-size: 0.8125rem;
+    line-height: 1.6;
+  }
+
+  .doc-body table {
+    width: 100%;
+    display: block;
+    overflow-x: auto;
+    border-collapse: collapse;
+    margin: 0 0 1.5rem;
+    font-size: 0.875rem;
+  }
+
+  .doc-body th,
+  .doc-body td {
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    padding: 0.5rem 0.75rem;
+    text-align: left;
+    vertical-align: top;
+  }
+
+  .doc-body th {
+    font-family: var(--font-epilogue);
+    font-weight: 600;
+    color: #dee5ff;
+    background: rgba(139, 92, 246, 0.08);
+    white-space: nowrap;
+  }
+
+  .doc-body tr:nth-child(even) td {
+    background: rgba(255, 255, 255, 0.02);
+  }
 }
