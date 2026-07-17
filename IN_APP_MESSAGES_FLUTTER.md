@@ -4,6 +4,67 @@ This document extends `FLUTTER_API.md` with the in-app messaging system.
 
 ---
 
+## ⚠️ Two Separate Delivery Systems
+
+There are **two unrelated "in-app message" mechanisms** across the apps. A message created in one system is invisible to apps that only implement the other.
+
+### 1. REST (pull-based) — this document, and the admin panel
+
+- Admin creates messages at `/admin/in-app-messages` → stored in Postgres (`in_app_messages`).
+- The app must call `GET https://mugenstream.fun/api/in-app-messages?app={slug}&deviceId={id}` **on every launch** and render the results itself.
+- The **Redeploy** button only flips `active = true` in the DB — it does **not** push anything. Delivery happens the next time a device fetches.
+
+### 2. FCM (push-based) — legacy overlay in the anime apps
+
+- The app subscribes to an FCM topic `inapp_<package_name_with_underscores>` and shows an overlay when a **data message with `type: "inapp"`** arrives.
+- Shown **only if the app is in the foreground** at the moment of delivery (`FirebaseMessaging.onMessage`); background devices just get a tray notification.
+- Nothing on the server sends these automatically. Send manually via `POST /api/admin/notifications` with body:
+
+  ```json
+  {
+    "topic": "inapp_com_noonanime_watchhindi",
+    "title": "…", "body": "…",
+    "data": {
+      "type": "inapp",
+      "style": "modal",
+      "title": "…", "body": "…",
+      "imageUrl": "https://…",
+      "ctaLabel": "Open", "ctaAction": "url", "ctaTarget": "https://…",
+      "dismissible": "false"
+    }
+  }
+  ```
+
+  (All `data` values must be strings. Keys must match the app's `InAppMessage.fromData`: `style` is `banner|modal`, `ctaAction` is `url|deeplink|dismiss`.)
+
+---
+
+## Per-App Integration Status
+
+The `app` slug the REST API filters on is the **App table slug** (see `/api/apps`), not the package name.
+
+| App | Package | App-table slug | REST fetch implemented? | FCM `inapp_*` topic |
+|---|---|---|---|---|
+| Mugen Anime | `com.mugenstream.anime` | `mugen-anime` | ❌ No | — |
+| Pandora Anime | `com.mugenanime.app` | — (not in App table) | ❌ No | `inapp_com_mugenanime_app` (also reused for episode alerts) |
+| Noon Anime | `com.noonanime.watch` | `noon-anime` | ❌ No | `inapp_com_noonanime_watch` |
+| **Noon Anime Hindi** ("Multi Language") | `com.noonanime.watchhindi` | **`noon-anime-ml`** | ❌ No — FCM overlay only (`NOON/noon_hindi`) | `inapp_com_noonanime_watchhindi` |
+| Word Bloom | `com.allthemyth.word_puzzle` | `wordpuzzel` | ✅ Yes (`lib/services/in_app_message_service.dart`) | — |
+
+> As of 2026-07-17, **only Word Bloom** implements the REST fetch below. The anime apps must either add it (copy Word Bloom's service) or be reached via the FCM path above.
+
+---
+
+## Troubleshooting: "app X isn't receiving my message"
+
+1. **Check the server is returning it** (public endpoint, no auth):
+   `curl "https://mugenstream.fun/api/in-app-messages?app=<slug>"` — the message must appear here. If not: check `active`, `startsAt`/`endsAt` window, and that `targetApp` exactly matches the slug the app sends (`noon-anime-ml`, not `noon-anime-hindi`).
+2. **Check `impressionCount`** in that response. If it stays `0`, no device has ever fetched/shown it → the app build doesn't call the REST endpoint (see the status table above) or sends a different slug/base URL.
+3. **Non-persistent messages** disappear per-device after a click (`deviceId` filter). Use **Redeploy → reset stats** to show them again.
+4. **FCM-only apps**: the overlay renders only in the foreground; there is no launch-time fetch, so a push only reaches users actively in the app at send time.
+
+---
+
 ## API Endpoints
 
 ### Fetch Active Messages
