@@ -21,9 +21,12 @@ interface Topic {
   boost: number;
   weight: number;
   avgViews: number;
+  avgReads: number;
+  readRate: number;
   postsScored: number;
   postsTotal: number;
   totalViews: number;
+  totalReads: number;
   lastUsedAt: string | null;
 }
 
@@ -42,7 +45,7 @@ interface RunRow {
 
 interface Payload {
   settings: { enabled: boolean; hour: number; perDay: number; timezone: string; lastRunDate: string | null };
-  scoring: { windowDays: number; minSamples: number; explorationRate: number };
+  scoring: { windowDays: number; minSamples: number; explorationRate: number; readBonus: number };
   topics: Topic[];
   history: RunRow[];
 }
@@ -271,9 +274,11 @@ export default function AutopilotPage() {
           </button>
         </div>
         <p className="font-body text-xs mb-4" style={{ color: "rgba(255,255,255,0.4)" }}>
-          Share is how often each topic gets picked. It comes from average views in the first{" "}
-          {scoring.windowDays} days after publishing, and only counts once a topic has{" "}
-          {scoring.minSamples}+ finished posts — until then it&apos;s treated as average.{" "}
+          Share is how often each topic gets picked, scored on engagement in the first{" "}
+          {scoring.windowDays} days after publishing. A reader who finishes the article counts{" "}
+          {scoring.readBonus + 1}× one who bounces, so a topic wins by being genuinely read rather
+          than just clicked. Only counts once a topic has {scoring.minSamples}+ finished posts —
+          until then it&apos;s treated as average.{" "}
           {Math.round(scoring.explorationRate * 100)}% of picks stay random so nothing gets stuck.
         </p>
 
@@ -355,7 +360,9 @@ export default function AutopilotPage() {
                         />
                       </div>
                       <span className="font-body text-[11px] tabular-nums" style={{ color: "rgba(255,255,255,0.5)" }}>
-                        {share.toFixed(0)}% share · {t.avgViews.toFixed(1)} avg views · {t.postsTotal} posts · {t.totalViews} total
+                        {share.toFixed(0)}% share · {t.avgViews.toFixed(1)} avg views ·{" "}
+                        {t.avgViews > 0 ? `${Math.round(t.readRate * 100)}% read through` : "no reads yet"} ·{" "}
+                        {t.postsTotal} posts · {t.totalViews} views / {t.totalReads} reads
                       </span>
                     </div>
                   </div>

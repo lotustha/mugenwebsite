@@ -61,6 +61,21 @@ export async function POST(
     });
     if (!post) return NextResponse.json({ ok: false }, { status: 404 });
 
+    // A "read" upgrades an existing view rather than adding one. Only the first
+    // upgrade bumps the counter, so re-reading an article can't inflate it.
+    if (body.event === "read") {
+      const existing = await prisma.postView.findUnique({
+        where: { postId_visitorKey: { postId: post.id, visitorKey } },
+        select: { id: true, completed: true },
+      });
+      if (!existing || existing.completed) {
+        return NextResponse.json({ ok: true, counted: false, reason: existing ? "already-read" : "no-view" });
+      }
+      await prisma.postView.update({ where: { id: existing.id }, data: { completed: true } });
+      await prisma.post.update({ where: { id: post.id }, data: { readsCount: { increment: 1 } } });
+      return NextResponse.json({ ok: true, counted: true, event: "read" });
+    }
+
     // The [postId, visitorKey] unique constraint makes this idempotent — a repeat
     // view throws P2002, which we swallow. viewsCount is only bumped when a row
     // was genuinely inserted, so the counter always equals the unique-visitor count.

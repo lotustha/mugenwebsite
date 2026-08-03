@@ -201,31 +201,68 @@ export default function NewsDetailContent({ slug }: { slug: string }) {
       .catch(() => { if (!preview) setMissing(true); setFullLoaded(true); });
   }, [slug, preview]);
 
-  // Record a view once the reader has actually stayed on the article for a few
-  // seconds. This is the engagement signal the AI autopilot learns from, so an
-  // instant bounce or a mis-click shouldn't count as interest.
+  // Engagement tracking — the signal the AI autopilot learns from.
+  //
+  // Two distinct events, and the difference matters: a VIEW only proves the
+  // headline worked, while a READ proves the article did. Scoring on views alone
+  // would push the generator toward clickbait over time, so we record both and
+  // let the scorer weight a completed read far above a bounce.
   useEffect(() => {
-    const timer = setTimeout(() => {
-      let visitorId: string | null = null;
-      try {
-        visitorId = localStorage.getItem("mv_vid");
-        if (!visitorId) {
-          visitorId = crypto.randomUUID();
-          localStorage.setItem("mv_vid", visitorId);
-        }
-      } catch {
-        // Private mode / storage disabled — the API falls back to an IP+UA hash.
+    let visitorId: string | null = null;
+    try {
+      visitorId = localStorage.getItem("mv_vid");
+      if (!visitorId) {
+        visitorId = crypto.randomUUID();
+        localStorage.setItem("mv_vid", visitorId);
       }
+    } catch {
+      // Private mode / storage disabled — the API falls back to an IP+UA hash.
+    }
 
+    const send = (event?: "read") =>
       fetch(`/api/posts/${encodeURIComponent(slug)}/view`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ visitorId, source: "web" }),
+        body: JSON.stringify({ visitorId, source: "web", event }),
         keepalive: true,
       }).catch(() => {});
-    }, 5000);
 
-    return () => clearTimeout(timer);
+    // A few seconds of dwell separates a real visit from a mis-click.
+    const viewTimer = setTimeout(() => send(), 5000);
+
+    // A read needs BOTH deep scroll and real time spent — either alone is easy to
+    // trip accidentally (a fast flick to the bottom, or a tab left open).
+    let deepScroll = false;
+    let dwelled = false;
+    let sent = false;
+
+    const maybeSend = () => {
+      if (deepScroll && dwelled && !sent) {
+        sent = true;
+        send("read");
+      }
+    };
+
+    const dwellTimer = setTimeout(() => { dwelled = true; maybeSend(); }, 30_000);
+
+    const onScroll = () => {
+      const scrollable = document.body.scrollHeight - window.innerHeight;
+      // Very short articles can't be scrolled; treat them as read on dwell alone.
+      if (scrollable < 400 || (window.scrollY + window.innerHeight) / document.body.scrollHeight > 0.7) {
+        deepScroll = true;
+        maybeSend();
+        window.removeEventListener("scroll", onScroll);
+      }
+    };
+
+    window.addEventListener("scroll", onScroll, { passive: true });
+    onScroll();
+
+    return () => {
+      clearTimeout(viewTimer);
+      clearTimeout(dwellTimer);
+      window.removeEventListener("scroll", onScroll);
+    };
   }, [slug]);
 
   if (missing) notFound();

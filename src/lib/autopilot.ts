@@ -17,6 +17,7 @@ import { callAi, downloadAndStoreImage, type AiSettings } from "@/lib/rss-proces
 import { createPostFromAi, slugify } from "@/lib/post-creator";
 import { findVideo, embedHtml } from "@/lib/youtube";
 import { scoreTopics, pickTopic } from "@/lib/autopilot-scoring";
+import { getAnimeContext } from "@/lib/anime-context";
 
 export interface AutopilotResult {
   status: "ok" | "error";
@@ -43,9 +44,15 @@ interface GeneratedPost {
 
 // ─── Prompts ──────────────────────────────────────────────────────────────────
 
-const IDEATION_PROMPT = (topicName: string, hint: string, recentTitles: string[]) => `
+const IDEATION_PROMPT = (
+  topicName: string,
+  hint: string,
+  recentTitles: string[],
+  animeContext: string,
+) => `
 You are the editor of Mugen Anime, a popular anime news and culture site.
 
+${animeContext ? `${animeContext}\n` : ""}
 Today you are commissioning ONE article in this section: "${topicName}".
 Section brief: ${hint}
 
@@ -55,6 +62,7 @@ ${recentTitles.length ? recentTitles.map((t) => `- ${t}`).join("\n") : "- (nothi
 Pick a SPECIFIC, concrete angle a real anime fan would click on this week.
 Name actual anime, characters, studios or events — never a generic listicle
 that could have been written five years ago.
+${animeContext ? "Strongly prefer titles from the live catalogue data above — readers can watch those on the app today." : ""}
 
 Return ONLY valid JSON, no markdown fences:
 {
@@ -69,9 +77,11 @@ const ARTICLE_PROMPT = (
   workingTitle: string,
   topicName: string,
   existingCategories: string[],
+  animeContext: string,
 ) => `
 You are a senior anime writer for Mugen Anime. Write a complete, publication-ready article.
 
+${animeContext ? `${animeContext}\n` : ""}
 ASSIGNMENT: ${angle}
 WORKING TITLE: ${workingTitle}
 SECTION: ${topicName}
@@ -85,7 +95,9 @@ WRITING RULES:
 - Use <h2> and <h3> subheadings, <p> paragraphs, <strong> for emphasis and <ul>
   lists where they genuinely help.
 - Be concrete: name real anime, studios, characters and years. If you are not
-  certain a fact is true, write around it rather than inventing it.
+  certain a fact is true, write around it rather than inventing it. Never state a
+  release date, episode count or staff credit you are not sure of — vague but
+  true beats specific but wrong.
 - Do NOT include an <h1> — the site renders the title separately.
 - Do NOT include any <img> tags or YouTube embeds; those are added automatically.
 - End with a short, natural call to action to watch on the Mugen Anime app.
@@ -221,16 +233,26 @@ export async function generatePost(opts: GenerateOptions): Promise<AutopilotResu
     });
     const recentTitles = recent.map((p) => p.title);
 
+    // Ground both prompts in the live catalogue. The model's sense of "currently
+    // airing" is frozen at its training cutoff, so without this the seasonal
+    // topics confidently write about a season that already ended.
+    const { promptBlock: animeContext } = await getAnimeContext();
+
     const idea = parseJson<{ angle: string; workingTitle: string }>(
-      await callAi(opts.aiSettings, IDEATION_PROMPT(topicRow.name, topicRow.promptHint, recentTitles)),
+      await callAi(
+        opts.aiSettings,
+        IDEATION_PROMPT(topicRow.name, topicRow.promptHint, recentTitles, animeContext),
+      ),
     );
 
     // 3. Write the article.
     const categories = await prisma.category.findMany({ select: { name: true } });
+    const catNames = categories.map((c) => c.name);
+
     let article = parseJson<GeneratedPost>(
       await callAi(
         opts.aiSettings,
-        ARTICLE_PROMPT(idea.angle, idea.workingTitle, topicRow.name, categories.map((c) => c.name)),
+        ARTICLE_PROMPT(idea.angle, idea.workingTitle, topicRow.name, catNames, animeContext),
       ),
     );
 
@@ -239,13 +261,13 @@ export async function generatePost(opts: GenerateOptions): Promise<AutopilotResu
       const retryIdea = parseJson<{ angle: string; workingTitle: string }>(
         await callAi(
           opts.aiSettings,
-          IDEATION_PROMPT(topicRow.name, topicRow.promptHint, [...recentTitles, article.title]),
+          IDEATION_PROMPT(topicRow.name, topicRow.promptHint, [...recentTitles, article.title], animeContext),
         ),
       );
       article = parseJson<GeneratedPost>(
         await callAi(
           opts.aiSettings,
-          ARTICLE_PROMPT(retryIdea.angle, retryIdea.workingTitle, topicRow.name, categories.map((c) => c.name)),
+          ARTICLE_PROMPT(retryIdea.angle, retryIdea.workingTitle, topicRow.name, catNames, animeContext),
         ),
       );
     }

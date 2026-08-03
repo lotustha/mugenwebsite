@@ -12,7 +12,7 @@ import { requireAdmin } from "@/lib/auth-helpers";
 import { DEFAULT_TOPICS } from "@/lib/autopilot";
 import { slugify } from "@/lib/post-creator";
 import { SETTINGS } from "@/lib/autopilot-runner";
-import { SCORING_WINDOW_DAYS, MIN_SAMPLES, EXPLORATION_RATE } from "@/lib/autopilot-scoring";
+import { SCORING_WINDOW_DAYS, MIN_SAMPLES, EXPLORATION_RATE, READ_BONUS } from "@/lib/autopilot-scoring";
 
 export const dynamic = "force-dynamic";
 
@@ -42,9 +42,10 @@ export async function GET() {
     const totals = await prisma.post.groupBy({
       by: ["topicId"],
       where: { source: "autopilot", topicId: { not: null } },
-      _sum: { viewsCount: true },
+      _sum: { viewsCount: true, readsCount: true },
     });
     const totalByTopic = Object.fromEntries(totals.map((t) => [t.topicId, t._sum.viewsCount ?? 0]));
+    const readsByTopic = Object.fromEntries(totals.map((t) => [t.topicId, t._sum.readsCount ?? 0]));
 
     const history = await prisma.autopilotRun.findMany({
       orderBy: { createdAt: "desc" },
@@ -74,6 +75,7 @@ export async function GET() {
         windowDays: SCORING_WINDOW_DAYS,
         minSamples: MIN_SAMPLES,
         explorationRate: EXPLORATION_RATE,
+        readBonus: READ_BONUS,
       },
       topics: topics.map((t) => ({
         id: t.id,
@@ -84,9 +86,12 @@ export async function GET() {
         boost: t.boost,
         weight: t.weight,
         avgViews: t.avgViews,
+        avgReads: t.avgReads,
+        readRate: t.readRate,
         postsScored: t.postsScored,
         postsTotal: t._count.posts,
         totalViews: totalByTopic[t.id] ?? 0,
+        totalReads: readsByTopic[t.id] ?? 0,
         lastUsedAt: t.lastUsedAt,
       })),
       history: history.map((h) => ({

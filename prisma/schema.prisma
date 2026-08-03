@@ -130,6 +130,7 @@ model Post {
   // for a week don't look like underperformers.
   publishedAt DateTime?  @map("published_at")
   viewsCount  Int        @default(0) @map("views_count")
+  readsCount  Int        @default(0) @map("reads_count")
   topicId     String?    @map("topic_id") @db.Uuid
   topic       AiTopic?   @relation(fields: [topicId], references: [id], onDelete: SetNull)
   views       PostView[]
@@ -150,6 +151,11 @@ model PostView {
   // post, ever. Refreshes and re-reads don't inflate a post's score.
   visitorKey String   @map("visitor_key")
   source     String? // "web" | "app"
+  // True once the visitor actually read the article through (deep scroll + dwell)
+  // rather than bouncing. A plain view only proves the TITLE worked; without this
+  // the autopilot optimises for clickbait, because a bounce and a genuine read
+  // are worth exactly the same to it.
+  completed  Boolean  @default(false)
   createdAt  DateTime @default(now()) @map("created_at")
 
   @@unique([postId, visitorKey])
@@ -318,6 +324,8 @@ model AiTopic {
   // why a topic is favoured without re-aggregating every page load.
   postsScored Int       @default(0) @map("posts_scored")
   avgViews    Float     @default(0) @map("avg_views")
+  avgReads    Float     @default(0) @map("avg_reads")
+  readRate    Float     @default(0) @map("read_rate")
   weight      Float     @default(1.0)
   lastUsedAt  DateTime? @map("last_used_at")
   createdAt   DateTime  @default(now()) @map("created_at")

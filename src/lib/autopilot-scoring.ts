@@ -37,11 +37,31 @@ export const MIN_SAMPLES = 3;
  */
 export const EXPLORATION_RATE = 0.25;
 
+/**
+ * How much a completed read outweighs a bounce.
+ *
+ * Scoring on raw views optimises for the HEADLINE, not the article — a title
+ * that everyone clicks and nobody finishes scores identically to one people
+ * actually read. Left alone, that pressure drifts the generator toward clickbait
+ * over months, so the loop would degrade quality while appearing to work.
+ *
+ * engagement = views + READ_BONUS × completed reads
+ *
+ * Reads are a subset of views, so a fully-read post scores 4× a fully-bounced
+ * one. When no reads have been recorded yet (e.g. before the tracking rolled
+ * out) every topic scales identically and the ranking degrades gracefully to
+ * plain views rather than breaking.
+ */
+export const READ_BONUS = 3;
+
 export interface TopicScore {
   topicId: string;
   name: string;
   postsScored: number;
   avgViews: number;
+  avgReads: number;
+  /** Share of viewers who read the article through — the quality signal. */
+  readRate: number;
   weight: number;
 }
 
@@ -67,44 +87,53 @@ export async function scoreTopics(): Promise<TopicScore[]> {
     select: { id: true, topicId: true, publishedAt: true },
   });
 
-  // Count only the views that landed inside each post's own window, so a post
-  // that keeps drawing traffic for months isn't credited more than a fair
+  // Count only the engagement that landed inside each post's own window, so a
+  // post that keeps drawing traffic for months isn't credited more than a fair
   // comparison allows.
-  const raw = new Map<string, number[]>();
+  interface Sample { views: number; reads: number; engagement: number }
+  const raw = new Map<string, Sample[]>();
 
   for (const post of posts) {
     const start = post.publishedAt!;
     const end = new Date(start.getTime() + windowMs);
-    const views = await prisma.postView.count({
-      where: { postId: post.id, createdAt: { gte: start, lte: end } },
-    });
+    const where = { postId: post.id, createdAt: { gte: start, lte: end } };
+
+    const [views, reads] = await Promise.all([
+      prisma.postView.count({ where }),
+      prisma.postView.count({ where: { ...where, completed: true } }),
+    ]);
+
     const bucket = raw.get(post.topicId!) ?? [];
-    bucket.push(views);
+    bucket.push({ views, reads, engagement: views + READ_BONUS * reads });
     raw.set(post.topicId!, bucket);
   }
+
+  const mean = (xs: number[]) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : 0);
 
   // Global mean across scored topics — the stand-in value for topics that don't
   // have enough data yet, so they're neither promoted nor punished.
   const allScored = [...raw.values()].filter((v) => v.length >= MIN_SAMPLES).flat();
-  const globalMean = allScored.length
-    ? allScored.reduce((a, b) => a + b, 0) / allScored.length
-    : 0;
+  const globalMean = mean(allScored.map((s) => s.engagement));
 
   const scores: TopicScore[] = topics.map((t) => {
     const samples = raw.get(t.id) ?? [];
-    const avg = samples.length ? samples.reduce((a, b) => a + b, 0) / samples.length : 0;
+    const avgViews = mean(samples.map((s) => s.views));
+    const avgReads = mean(samples.map((s) => s.reads));
+    const avgEngagement = mean(samples.map((s) => s.engagement));
     const trusted = samples.length >= MIN_SAMPLES;
 
     // Relative performance vs the site average, clamped so one runaway hit can't
     // collapse the distribution onto a single topic.
-    const relative = trusted && globalMean > 0 ? avg / globalMean : 1;
+    const relative = trusted && globalMean > 0 ? avgEngagement / globalMean : 1;
     const weight = Math.max(0.15, Math.min(3, relative)) * (t.boost ?? 1);
 
     return {
       topicId: t.id,
       name: t.name,
       postsScored: samples.length,
-      avgViews: Number(avg.toFixed(2)),
+      avgViews: Number(avgViews.toFixed(2)),
+      avgReads: Number(avgReads.toFixed(2)),
+      readRate: avgViews > 0 ? Number((avgReads / avgViews).toFixed(3)) : 0,
       weight: Number(weight.toFixed(3)),
     };
   });
@@ -113,7 +142,13 @@ export async function scoreTopics(): Promise<TopicScore[]> {
     scores.map((s) =>
       prisma.aiTopic.update({
         where: { id: s.topicId },
-        data: { postsScored: s.postsScored, avgViews: s.avgViews, weight: s.weight },
+        data: {
+          postsScored: s.postsScored,
+          avgViews: s.avgViews,
+          avgReads: s.avgReads,
+          readRate: s.readRate,
+          weight: s.weight,
+        },
       }),
     ),
   );
