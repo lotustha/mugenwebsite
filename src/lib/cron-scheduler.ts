@@ -10,7 +10,7 @@ export function startCronScheduler() {
   if (started) return; // guard against hot-reload re-registration in dev
   started = true;
 
-  console.log("[cron] Background scheduler initialised — RSS every 60 s, episodes every 15 min, wallpapers every 5 min");
+  console.log("[cron] Background scheduler initialised — RSS every 60 s, episodes every 15 min, wallpapers every 5 min, AI autopilot every 10 min");
 
   // Small startup delay so the DB connection pool is warm before first tick
   setTimeout(tick, 15_000);
