@@ -6,7 +6,9 @@
  * uptime pinger) can drive it too. Both paths share the same calendar-date guard,
  * so triggering from several places cannot double-post.
  *
- * ?force=1 bypasses the schedule and publishes immediately.
+ * ?force=1  bypasses the schedule and generates immediately.
+ * ?draft=1  saves as a draft and sends no push notification — use this to
+ *           smoke-test the pipeline in production safely.
  */
 
 import { NextResponse } from "next/server";
@@ -25,7 +27,10 @@ export async function GET(request: Request) {
   }
 
   try {
-    const result = await runDailyAutopilot(url.searchParams.get("force") === "1");
+    const result = await runDailyAutopilot(
+      url.searchParams.get("force") === "1",
+      url.searchParams.get("draft") !== "1",
+    );
     return NextResponse.json({ ok: true, ...result });
   } catch (e) {
     return NextResponse.json(

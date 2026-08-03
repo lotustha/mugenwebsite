@@ -60,9 +60,13 @@ export interface DailyRunResult {
 
 /**
  * Run today's batch if it's due and hasn't happened yet.
+ *
  * `force` bypasses both the schedule and the already-ran-today guard.
+ * `publish: false` writes the post as a draft and skips the push notification —
+ * the safe way to smoke-test the pipeline against production without notifying
+ * every app user.
  */
-export async function runDailyAutopilot(force = false): Promise<DailyRunResult> {
+export async function runDailyAutopilot(force = false, publish = true): Promise<DailyRunResult> {
   const enabled = await getSetting(SETTINGS.enabled);
   if (!force && enabled !== "true") return { ran: false, reason: "disabled" };
 
@@ -96,7 +100,7 @@ export async function runDailyAutopilot(force = false): Promise<DailyRunResult> 
 
   try {
     for (let i = 0; i < perDay; i++) {
-      results.push(await generatePost({ aiSettings, trigger: force ? "manual" : "cron" }));
+      results.push(await generatePost({ aiSettings, publish, trigger: force ? "manual" : "cron" }));
       // Space out calls — free-tier Gemini is rate-limited per minute.
       if (i < perDay - 1) await new Promise((r) => setTimeout(r, 20_000));
     }
