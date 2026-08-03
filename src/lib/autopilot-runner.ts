@@ -19,6 +19,7 @@ export const SETTINGS = {
   lastRunDate: "autopilot_last_date", // YYYY-MM-DD of the last completed batch
   timezone: "autopilot_timezone",     // IANA tz, defaults to UTC
   attempts: "autopilot_attempts",     // "YYYY-MM-DD:n" — failed attempts today
+  alert: "autopilot_alert",           // JSON describing the last give-up, for the admin UI
 } as const;
 
 /**
@@ -81,6 +82,21 @@ async function bumpAttempts(today: string): Promise<number> {
   const next = (await getAttempts(today)) + 1;
   await setSetting(SETTINGS.attempts, `${today}:${next}`);
   return next;
+}
+
+/**
+ * Record a give-up so the admin UI can surface it.
+ *
+ * Deliberately NOT a push notification: a failed internal job is not reader-
+ * facing, and blasting every app user about it would be worse than the silence
+ * it replaces. The admin page shows this as a banner instead.
+ */
+async function raiseAlert(today: string, attempts: number, results: AutopilotResult[]): Promise<void> {
+  const reasons = [...new Set(results.map((r) => r.error).filter(Boolean))].slice(0, 3);
+  await setSetting(
+    SETTINGS.alert,
+    JSON.stringify({ date: today, attempts, reasons, at: new Date().toISOString() }),
+  ).catch(() => {});
 }
 
 /** Put the day's claim back the way it was before this run took it. */
@@ -159,15 +175,21 @@ export async function runDailyAutopilot(force = false, publish = true): Promise<
   if (!force && results.every((r) => r.status === "error")) {
     const attempts = await bumpAttempts(today);
     await releaseClaim(claimedDate);
+
+    const givingUp = attempts >= MAX_ATTEMPTS_PER_DAY;
+    if (givingUp) await raiseAlert(today, attempts, results);
+
     return {
       ran: true,
-      reason:
-        attempts >= MAX_ATTEMPTS_PER_DAY
-          ? `all generations failed — giving up for today after ${attempts} attempts`
-          : `all generations failed — will retry (attempt ${attempts}/${MAX_ATTEMPTS_PER_DAY})`,
+      reason: givingUp
+        ? `all generations failed — giving up for today after ${attempts} attempts`
+        : `all generations failed — will retry (attempt ${attempts}/${MAX_ATTEMPTS_PER_DAY})`,
       results,
     };
   }
+
+  // A successful batch clears any stale alert banner.
+  if (!force) await prisma.systemSetting.delete({ where: { key: SETTINGS.alert } }).catch(() => {});
 
   return { ran: true, results };
 }

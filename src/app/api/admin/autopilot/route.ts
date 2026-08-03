@@ -71,6 +71,15 @@ export async function GET() {
         timezone: cfg[SETTINGS.timezone] || "UTC",
         lastRunDate: cfg[SETTINGS.lastRunDate] ?? null,
       },
+      // Present only when the generator exhausted its retries for a day; the UI
+      // renders it as a banner so a silent multi-day outage can't go unnoticed.
+      alert: (() => {
+        try {
+          return cfg[SETTINGS.alert] ? JSON.parse(cfg[SETTINGS.alert]) : null;
+        } catch {
+          return null;
+        }
+      })(),
       scoring: {
         windowDays: SCORING_WINDOW_DAYS,
         minSamples: MIN_SAMPLES,

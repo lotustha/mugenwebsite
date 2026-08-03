@@ -46,6 +46,7 @@ interface RunRow {
 interface Payload {
   settings: { enabled: boolean; hour: number; perDay: number; timezone: string; lastRunDate: string | null };
   scoring: { windowDays: number; minSamples: number; explorationRate: number; readBonus: number };
+  alert: { date: string; attempts: number; reasons: string[]; at: string } | null;
   topics: Topic[];
   history: RunRow[];
 }
@@ -158,7 +159,7 @@ export default function AutopilotPage() {
     return <div className="p-8 font-body text-sm text-red-400">Failed to load autopilot.</div>;
   }
 
-  const { settings, scoring, topics, history } = data;
+  const { settings, scoring, topics, history, alert } = data;
   const totalWeight = topics.filter((t) => t.isActive).reduce((s, t) => s + t.weight, 0) || 1;
 
   return (
@@ -192,6 +193,29 @@ export default function AutopilotPage() {
           }}
         >
           {runMsg.text}
+        </div>
+      )}
+
+      {alert && (
+        <div
+          className="rounded-xl px-4 py-3"
+          style={{ background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.3)" }}
+        >
+          <div className="font-body text-sm font-semibold" style={{ color: "#f87171" }}>
+            No post published on {alert.date} — gave up after {alert.attempts} attempts
+          </div>
+          {alert.reasons?.length > 0 && (
+            <ul className="mt-1.5 space-y-0.5">
+              {alert.reasons.map((r, i) => (
+                <li key={i} className="font-body text-xs" style={{ color: "rgba(255,255,255,0.5)" }}>
+                  {r}
+                </li>
+              ))}
+            </ul>
+          )}
+          <div className="font-body text-[11px] mt-1.5" style={{ color: "rgba(255,255,255,0.35)" }}>
+            Clears automatically after the next successful run.
+          </div>
         </div>
       )}
 

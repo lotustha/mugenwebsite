@@ -166,6 +166,45 @@ function tooSimilar(candidate: string, existing: string[]): boolean {
   });
 }
 
+/**
+ * Build a "Related reading" block linking to existing posts that share tags.
+ *
+ * The site already has JSON-LD, canonical URLs and a sitemap, so the remaining
+ * on-page SEO gap was that no post linked to any other — every article was an
+ * orphan, which wastes the crawl equity a daily publishing cadence generates.
+ * Linking by shared tag also keeps readers on the site instead of bouncing.
+ */
+async function buildRelatedLinks(tags: string[], excludeSlug: string): Promise<string> {
+  const names = tags.map((t) => String(t ?? "").trim()).filter(Boolean);
+  if (!names.length) return "";
+
+  try {
+    const related = await prisma.post.findMany({
+      where: {
+        published: true,
+        slug: { not: excludeSlug },
+        tags: { some: { name: { in: names, mode: "insensitive" } } },
+      },
+      select: { slug: true, title: true },
+      orderBy: { publishedAt: "desc" },
+      take: 3,
+    });
+    if (!related.length) return "";
+
+    const items = related
+      .map((p) => `  <li><a href="/news/${p.slug}">${escapeHtml(p.title)}</a></li>`)
+      .join("\n");
+    return `\n<h2>Related Reading</h2>\n<ul>\n${items}\n</ul>\n`;
+  } catch {
+    // Never let link-building fail a generation.
+    return "";
+  }
+}
+
+function escapeHtml(s: string): string {
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+
 /** Look up a poster from the site's own anime API — used when there's no video. */
 async function findAnimePoster(query: string): Promise<string | null> {
   const base = process.env.ANIME_API_BASE;
@@ -291,13 +330,17 @@ export async function generatePost(opts: GenerateOptions): Promise<AutopilotResu
       if (poster) featuredImage = await downloadAndStoreImage(poster, "ai");
     }
 
-    // 6. Assemble the body: takeaways → article → video embed.
+    // 6. Assemble the body: takeaways → article → video embed → related links.
     const bullets = Array.isArray(article.bulletPoints) ? article.bulletPoints.filter(Boolean) : [];
     const bulletBlock = bullets.length
       ? `<h2>Quick Takeaways</h2>\n<ul>\n${bullets.map((b) => `  <li>${String(b).replace(/^[•\-]\s*/, "")}</li>`).join("\n")}\n</ul>\n<hr />\n`
       : "";
     const videoBlock = video ? `\n${embedHtml(video, "Watch the Trailer")}\n` : "";
-    const contentHtml = `${bulletBlock}${article.contentHtml}${videoBlock}`;
+    const relatedBlock = await buildRelatedLinks(
+      Array.isArray(article.tags) ? article.tags : [],
+      article.slug || slugify(article.title),
+    );
+    const contentHtml = `${bulletBlock}${article.contentHtml}${videoBlock}${relatedBlock}`;
 
     const post = await createPostFromAi({
       title: article.title,

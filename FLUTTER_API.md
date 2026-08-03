@@ -44,6 +44,60 @@ GET /api/posts/{slug}
 }
 ```
 
+### Reading Analytics — `view` and `read`
+
+```
+POST /api/posts/{slug}/view
+```
+
+No auth required. **This feeds the AI Autopilot**, which decides what kinds of
+posts to write more of based on what people actually engage with. Until the app
+sends these events, app readers are invisible to it and the site's content mix is
+steered by web visitors alone.
+
+Send **two** distinct events per article:
+
+| Event | When to send | Meaning |
+| ----- | ------------ | ------- |
+| view  | after ~5s on the article | the headline earned a click |
+| read  | after the user scrolls past ~70% **and** has spent ~30s | they actually read it |
+
+Both matter. A view alone only proves the title worked — without `read`, the
+generator gets rewarded for clickbait.
+
+**Request:**
+```json
+{ "deviceId": "<stable per-install id>", "source": "app", "event": "read" }
+```
+Omit `event` (or send `"view"`) for the view. `deviceId` should be a stable
+random id generated once per install and persisted — it is hashed server-side
+and used only to avoid counting the same reader twice.
+
+**Response:**
+```json
+{ "ok": true, "counted": true }
+```
+`counted: false` is normal and safe to ignore — it means duplicate, bot, or a
+`read` sent before its `view`. Always send the `view` first.
+
+```dart
+Future<void> trackPost(String slug, {bool read = false}) async {
+  try {
+    await http.post(
+      Uri.parse('$baseUrl/api/posts/$slug/view'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({
+        'deviceId': await deviceId(),   // persisted, e.g. in shared_preferences
+        'source': 'app',
+        if (read) 'event': 'read',
+      }),
+    );
+  } catch (_) {
+    // Analytics must never disrupt reading.
+  }
+}
+```
+
 ### Post Dart Model
 ```dart
 class Post {

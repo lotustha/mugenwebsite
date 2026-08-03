@@ -40,12 +40,39 @@ export async function verifyVideo(id: string): Promise<YoutubeVideo | null> {
       url: `https://www.youtube.com/watch?v=${id}`,
       title: d.title ?? "",
       author: d.author_name ?? "",
-      // hqdefault exists for every video; maxresdefault 404s on plenty of them.
-      thumbnail: `https://i.ytimg.com/vi/${id}/hqdefault.jpg`,
+      thumbnail: await bestThumbnail(id),
     };
   } catch {
     return null;
   }
+}
+
+/**
+ * Highest-resolution thumbnail that actually exists for this video.
+ *
+ * `hqdefault` is guaranteed but only 480×360, which looks soft stretched across
+ * a desktop post header. The larger sizes are generated per-video and 404 on
+ * plenty of them — notably older uploads and anything never published in HD —
+ * so each candidate is probed rather than assumed.
+ */
+export async function bestThumbnail(id: string): Promise<string> {
+  const candidates = ["maxresdefault", "sddefault", "hqdefault"];
+
+  for (const name of candidates.slice(0, -1)) {
+    const url = `https://i.ytimg.com/vi/${id}/${name}.jpg`;
+    try {
+      const res = await fetch(url, { method: "HEAD", signal: AbortSignal.timeout(8_000) });
+      // YouTube serves a 120×90 grey placeholder instead of 404 in some cases;
+      // a real image at these sizes is always comfortably larger than that.
+      const length = Number(res.headers.get("content-length") ?? 0);
+      if (res.ok && length > 3000) return url;
+    } catch {
+      // Fall through to the next candidate.
+    }
+  }
+
+  // Always exists.
+  return `https://i.ytimg.com/vi/${id}/hqdefault.jpg`;
 }
 
 /** Official Data API — used only when a key is configured. 100 quota units/search. */

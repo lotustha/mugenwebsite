@@ -128,7 +128,7 @@ export async function createPostFromAi(input: CreatePostInput) {
     },
   });
 
-  // Fire-and-forget: a push failure must never fail the post creation.
+  // Fire-and-forget: neither a push nor an SEO ping may fail post creation.
   if (input.published && !input.silent) {
     import("./push-notifications")
       .then(async ({ sendPostNotification }) => {
@@ -141,6 +141,12 @@ export async function createPostFromAi(input: CreatePostInput) {
           featuredImage: absolutizeUrl(post.featuredImage) ?? null,
         });
       })
+      .catch(() => {});
+
+    // Ask the IndexNow engines to crawl it now. A daily post that sits
+    // unindexed for a week has already lost most of its news value.
+    import("./indexnow")
+      .then(({ submitPost }) => submitPost(post.slug))
       .catch(() => {});
   }
 
