@@ -41,6 +41,12 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
       seo,
     } = body;
 
+    // Capture the prior published state so we only push on a false→true flip.
+    const prev = await prisma.post.findUnique({
+      where: { id },
+      select: { published: true, publishedAt: true },
+    });
+
     const post = await prisma.post.update({
       where: { id },
       data: {
@@ -49,6 +55,10 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
         ...(summary !== undefined && { summary }),
         ...(content !== undefined && { content }),
         ...(published !== undefined && { published }),
+        // Stamp on the first draft→published flip only. Re-publishing a post that
+        // was already live must NOT reset the clock, or its engagement window
+        // restarts and the topic scoring sees it as a brand-new post.
+        ...(published === true && prev && !prev.publishedAt && { publishedAt: new Date() }),
         ...(featuredImage !== undefined && { featuredImage }),
         ...(featuredImageAlt !== undefined && { featuredImageAlt }),
         ...(categoryIds !== undefined && {
@@ -80,6 +90,21 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
       },
       include: { categories: true, tags: true, seoMeta: true },
     });
+
+    // Push "new post" only when this update flips it from draft → published.
+    if (post.published && prev && !prev.published) {
+      import("@/lib/push-notifications").then(async ({ sendPostNotification }) => {
+        const { absolutizeUrl } = await import("@/lib/url");
+        return sendPostNotification({
+          id: post.id,
+          slug: post.slug,
+          title: post.title,
+          summary: post.summary ?? null,
+          featuredImage: absolutizeUrl(post.featuredImage) ?? null,
+        });
+      }).catch(() => {});
+    }
+
     return NextResponse.json(post);
   } catch (err: any) {
     if (err?.code === "P2002") return NextResponse.json({ error: "Slug already exists" }, { status: 409 });

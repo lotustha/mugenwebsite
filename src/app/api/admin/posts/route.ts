@@ -41,6 +41,9 @@ export async function POST(request: Request) {
     const post = await prisma.post.create({
       data: {
         title, slug, summary, content, published,
+        // Stamped on the false→true transition only; engagement is scored over a
+        // window since this moment, not since row creation.
+        publishedAt: published ? new Date() : null,
         featuredImage, featuredImageAlt,
         authorId,
         categories: { connect: categoryIds.map((id: string) => ({ id })) },
@@ -59,6 +62,21 @@ export async function POST(request: Request) {
       },
       include: { categories: true, tags: true, seoMeta: true },
     });
+
+    // Push "new post" to subscribers when it's created already-published.
+    if (post.published) {
+      import("@/lib/push-notifications").then(async ({ sendPostNotification }) => {
+        const { absolutizeUrl } = await import("@/lib/url");
+        return sendPostNotification({
+          id: post.id,
+          slug: post.slug,
+          title: post.title,
+          summary: post.summary ?? null,
+          featuredImage: absolutizeUrl(post.featuredImage) ?? null,
+        });
+      }).catch(() => {});
+    }
+
     return NextResponse.json(post, { status: 201 });
   } catch (err: any) {
     if (err?.code === "P2002") return NextResponse.json({ error: "Slug already exists" }, { status: 409 });

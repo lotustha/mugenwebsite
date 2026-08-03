@@ -24,6 +24,29 @@ export function startCronScheduler() {
   // self-throttles via its own scheduleMinutes (default twice a day).
   setTimeout(wallpaperTick, 45_000);
   setInterval(wallpaperTick, 5 * 60_000);
+
+  // AI autopilot. Polled every 10 min but gated on a calendar date, so it
+  // publishes at most one batch per day regardless of restarts or tick count.
+  setTimeout(autopilotTick, 60_000);
+  setInterval(autopilotTick, 10 * 60_000);
+}
+
+async function autopilotTick() {
+  try {
+    const { runDailyAutopilot } = await import("@/lib/autopilot-runner");
+    const res = await runDailyAutopilot(false);
+
+    if (res.ran) {
+      const ok = res.results?.filter((r) => r.status === "ok").length ?? 0;
+      const failed = res.results?.filter((r) => r.status === "error").length ?? 0;
+      console.log(`[cron] Autopilot: ${ok} post(s) published, ${failed} failed`);
+      for (const r of res.results ?? []) {
+        if (r.status === "error") console.error(`[cron] Autopilot error: ${r.error}`);
+      }
+    }
+  } catch (err) {
+    console.error("[cron] Autopilot tick error:", err instanceof Error ? err.message : err);
+  }
 }
 
 async function wallpaperTick() {

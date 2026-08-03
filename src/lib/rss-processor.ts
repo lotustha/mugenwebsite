@@ -16,6 +16,7 @@
 
 import { prisma } from "@/lib/prisma";
 import { saveBuffer } from "@/lib/storage";
+import { createPostFromAi } from "@/lib/post-creator";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 export interface RssItem {
@@ -116,7 +117,72 @@ Return ONLY valid JSON (no markdown, no explanation):
 }
 `.trim();
 
+/**
+ * Gemini free-tier fallback chain, best → cheapest.
+ *
+ * Verified against the live ListModels response for this project's key: the
+ * previously-configured `gemini-1.5-flash` and `gemini-3.1-pro` both 404 (the
+ * former withdrawn, the latter only exists as `-preview`). Free-tier quota is
+ * per-model, so when the first choice returns 429 the next one usually still has
+ * budget — which is what keeps a once-a-day generator running without billing.
+ */
+const GEMINI_FALLBACKS = [
+  "gemini-3.5-flash",
+  "gemini-2.5-flash",
+  "gemini-flash-latest",
+  "gemini-2.5-flash-lite",
+];
+
+/** 429 = quota, 5xx = transient. Both are worth another attempt; 400/404 aren't. */
+export class AiHttpError extends Error {
+  constructor(public status: number, message: string) {
+    super(message);
+    this.name = "AiHttpError";
+  }
+  get retryable() {
+    return this.status === 429 || this.status >= 500;
+  }
+}
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/**
+ * Resilient wrapper around callAiOnce.
+ *
+ * Without this a single free-tier 429 threw away an entire scheduled run — and
+ * on a once-a-day generator that means losing the whole day's post.
+ */
 export async function callAi(settings: AiSettings, prompt: string): Promise<string> {
+  // For Gemini, walk the fallback chain: configured model first (if it isn't
+  // already in the list), then progressively cheaper ones.
+  const models =
+    settings.provider === "gemini"
+      ? [...new Set([settings.model, ...GEMINI_FALLBACKS].filter(Boolean) as string[])]
+      : [settings.model ?? ""];
+
+  let lastErr: unknown;
+
+  for (const model of models) {
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        const out = await callAiOnce({ ...settings, model }, prompt);
+        if (out?.trim()) return out;
+        // Empty body with a 200 — transient; retry the same model.
+        lastErr = new Error("AI returned an empty response");
+      } catch (e) {
+        lastErr = e;
+        // A 400/404 means this model is wrong, not busy — move to the next one
+        // immediately instead of burning retries on it.
+        if (e instanceof AiHttpError && !e.retryable) break;
+      }
+      await sleep(1500 * 2 ** attempt); // 1.5s, 3s, 6s
+    }
+  }
+
+  throw lastErr instanceof Error ? lastErr : new Error(String(lastErr));
+}
+
+export async function callAiOnce(settings: AiSettings, prompt: string): Promise<string> {
   const { provider, apiKey, model } = settings;
 
   if (provider === "openrouter") {
@@ -135,21 +201,36 @@ export async function callAi(settings: AiSettings, prompt: string): Promise<stri
         max_tokens: 3000,
       }),
     });
-    if (!res.ok) throw new Error(`OpenRouter: ${res.status}`);
+    if (!res.ok) throw new AiHttpError(res.status, `OpenRouter: ${res.status} ${(await res.text()).slice(0, 200)}`);
     const d = await res.json();
     return d?.choices?.[0]?.message?.content ?? "";
   }
 
   if (provider === "gemini") {
-    const modelName = model || "gemini-1.5-flash";
+    const modelName = model || GEMINI_FALLBACKS[0];
+
+    // Current Gemini models think before answering, and thinking tokens are
+    // billed against maxOutputTokens. At the old limit of 3000 a long-article
+    // prompt burned the ENTIRE budget on thoughts and came back with
+    // finishReason=MAX_TOKENS and an empty text part — verified against the live
+    // API. Hence the much higher ceiling plus an explicit thinking cap.
+    //
+    // The two knobs are not interchangeable: `thinkingLevel` 400s on 2.5-era
+    // models ("Thinking level is not supported for this model"), while
+    // `thinkingBudget` is the 2.5-era spelling. Pick per family.
+    const thinkingConfig = modelName.startsWith("gemini-2.")
+      ? { thinkingBudget: 0 }
+      : { thinkingLevel: "low" };
+
     const res = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        signal: AbortSignal.timeout(180_000),
         body: JSON.stringify({
           contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: { temperature: 0.75, maxOutputTokens: 3000 },
+          generationConfig: { temperature: 0.75, maxOutputTokens: 16000, thinkingConfig },
           safetySettings: [
             { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_NONE" },
             { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_NONE" },
@@ -159,9 +240,12 @@ export async function callAi(settings: AiSettings, prompt: string): Promise<stri
         }),
       }
     );
-    if (!res.ok) throw new Error(`Gemini: ${res.status}`);
+    if (!res.ok) throw new AiHttpError(res.status, `Gemini: ${res.status} ${(await res.text()).slice(0, 200)}`);
     const d = await res.json();
-    return d?.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
+    // Long answers arrive split across several parts — joining them all avoids
+    // silently truncating the article to its first chunk.
+    const parts = d?.candidates?.[0]?.content?.parts;
+    return Array.isArray(parts) ? parts.map((p: { text?: string }) => p?.text ?? "").join("") : "";
   }
 
   if (provider === "openai") {
@@ -176,7 +260,7 @@ export async function callAi(settings: AiSettings, prompt: string): Promise<stri
         max_tokens: 3000,
       }),
     });
-    if (!res.ok) throw new Error(`OpenAI: ${res.status}`);
+    if (!res.ok) throw new AiHttpError(res.status, `OpenAI: ${res.status} ${(await res.text()).slice(0, 200)}`);
     const d = await res.json();
     return d?.choices?.[0]?.message?.content ?? "";
   }
@@ -195,19 +279,12 @@ export async function callAi(settings: AiSettings, prompt: string): Promise<stri
         messages: [{ role: "user", content: prompt }],
       }),
     });
-    if (!res.ok) throw new Error(`Claude: ${res.status}`);
+    if (!res.ok) throw new AiHttpError(res.status, `Claude: ${res.status} ${(await res.text()).slice(0, 200)}`);
     const d = await res.json();
     return d?.content?.[0]?.text ?? "";
   }
 
   throw new Error(`Unknown AI provider: ${provider}`);
-}
-
-function slugify(text: string): string {
-  return text
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/(^-|-$)/g, "");
 }
 
 // ─── Scrape OG/Twitter image from article URL ────────────────────────────────
@@ -269,16 +346,11 @@ async function processItem(
   const existingCats = await prisma.category.findMany({ select: { id: true, name: true, slug: true } });
   const catNames = existingCats.map((c) => c.name);
 
-  // 2. Call AI — retry once on empty response
+  // 2. Call AI — callAi already handles backoff, empty bodies and model fallback
   const prompt = AI_PROMPT(item, catNames);
   let aiRaw: string;
   try {
     aiRaw = await callAi(aiSettings, prompt);
-    // Retry once if the AI returned an empty body (transient issue)
-    if (!aiRaw?.trim()) {
-      await new Promise(r => setTimeout(r, 1500));
-      aiRaw = await callAi(aiSettings, prompt);
-    }
   } catch (e) {
     return { status: "error", error: `AI call failed: ${e instanceof Error ? e.message : String(e)}` };
   }
@@ -330,93 +402,38 @@ async function processItem(
     if (good) featuredImage = await downloadAndStoreImage(good);
   }
 
-  // 5. Ensure category exists (create if needed)
-  const categoryName = ai.category || item.category || "Anime News";
-  const categorySlug = slugify(categoryName);
-  let category = existingCats.find(
-    (c) => c.name.toLowerCase() === categoryName.toLowerCase() || c.slug === categorySlug
-  );
-  if (!category) {
-    try {
-      category = await prisma.category.create({ data: { name: categoryName, slug: categorySlug } });
-    } catch {
-      // race condition — try fetching again
-      category = await prisma.category.findFirst({ where: { slug: categorySlug } }) ?? existingCats[0];
-    }
-  }
-
-  // 6. Ensure tags exist
-  const tagIds: string[] = [];
-  const rawTags: string[] = Array.isArray(ai.tags) ? ai.tags.slice(0, 8) : [];
-  for (const tagName of rawTags) {
-    const tagSlug = slugify(tagName);
-    if (!tagSlug) continue;
-    let tag = await prisma.tag.findFirst({ where: { slug: tagSlug } });
-    if (!tag) {
-      try {
-        tag = await prisma.tag.create({ data: { name: tagName, slug: tagSlug } });
-      } catch {
-        tag = await prisma.tag.findFirst({ where: { slug: tagSlug } });
-      }
-    }
-    if (tag) tagIds.push(tag.id);
-  }
-
-  // 7. Build final content (bullet summary block + humanized article)
+  // 5. Build final content (bullet summary block + humanized article)
   const bulletBlock = Array.isArray(ai.bulletPoints) && ai.bulletPoints.length
     ? `<h2>Quick Summary</h2>\n<ul>\n${ai.bulletPoints.map(bp => `  <li>${bp.replace(/^•\s*/, "")}</li>`).join("\n")}\n</ul>\n<hr />\n\n`
     : "";
   const finalContent = bulletBlock + (ai.humanizedContent ?? item.content);
 
-  // 8. Unique slug
-  let slug = ai.slug || slugify(ai.title || item.title);
-  const existingSlug = await prisma.post.findUnique({ where: { slug } });
-  if (existingSlug) slug = `${slug}-${Date.now()}`;
-
-  // 9. Create post
-  let post;
+  // 6. Category / tag / slug resolution, SeoMeta and the push notification all
+  //    live in the shared writer, which the AI autopilot uses too.
+  const rawTags: string[] = Array.isArray(ai.tags) ? ai.tags.slice(0, 8) : [];
   try {
-    post = await prisma.post.create({
-      data: {
-        title: ai.title || item.title,
-        slug,
-        summary: ai.summary || item.description,
-        content: finalContent,
-        published: autoPublish,
-        featuredImage: featuredImage ?? undefined,
-        featuredImageAlt: ai.title || item.title,
-        authorId,
-        categories: category ? { connect: [{ id: category.id }] } : undefined,
-        tags: tagIds.length ? { connect: tagIds.map((id) => ({ id })) } : undefined,
-        seoMeta: {
-          create: {
-            metaTitle: ai.seo?.metaTitle || ai.title || item.title,
-            metaDescription: ai.seo?.metaDescription || ai.summary || item.description,
-            ogImageUrl: featuredImage || null,
-            keywords: ai.seo?.keywords || rawTags.join(", "),
-          },
-        },
+    const post = await createPostFromAi({
+      title: ai.title || item.title,
+      slug: ai.slug,
+      summary: ai.summary || item.description,
+      contentHtml: finalContent,
+      category: ai.category || item.category || "Anime News",
+      tags: rawTags,
+      featuredImage,
+      featuredImageAlt: ai.title || item.title,
+      seo: {
+        metaTitle: ai.seo?.metaTitle,
+        metaDescription: ai.seo?.metaDescription,
+        keywords: ai.seo?.keywords,
       },
+      authorId,
+      published: autoPublish,
+      source: "rss",
     });
+    return { status: "ok", postId: post.id };
   } catch (e) {
     return { status: "error", error: `Post create failed: ${e instanceof Error ? e.message : String(e)}` };
   }
-
-  // Fire-and-forget push notification (only for auto-published posts)
-  if (autoPublish) {
-    import("./push-notifications").then(async ({ sendPostNotification }) => {
-      const { absolutizeUrl } = await import("./url");
-      return sendPostNotification({
-        id:            post.id,
-        slug:          post.slug,
-        title:         post.title,
-        summary:       post.summary ?? null,
-        featuredImage: absolutizeUrl(post.featuredImage) ?? null,
-      });
-    }).catch(() => {});
-  }
-
-  return { status: "ok", postId: post.id };
 }
 
 // ─── Main processor exported for use in cron + manual trigger ────────────────

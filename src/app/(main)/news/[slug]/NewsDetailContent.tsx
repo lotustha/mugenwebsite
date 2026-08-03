@@ -201,6 +201,33 @@ export default function NewsDetailContent({ slug }: { slug: string }) {
       .catch(() => { if (!preview) setMissing(true); setFullLoaded(true); });
   }, [slug, preview]);
 
+  // Record a view once the reader has actually stayed on the article for a few
+  // seconds. This is the engagement signal the AI autopilot learns from, so an
+  // instant bounce or a mis-click shouldn't count as interest.
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      let visitorId: string | null = null;
+      try {
+        visitorId = localStorage.getItem("mv_vid");
+        if (!visitorId) {
+          visitorId = crypto.randomUUID();
+          localStorage.setItem("mv_vid", visitorId);
+        }
+      } catch {
+        // Private mode / storage disabled — the API falls back to an IP+UA hash.
+      }
+
+      fetch(`/api/posts/${encodeURIComponent(slug)}/view`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ visitorId, source: "web" }),
+        keepalive: true,
+      }).catch(() => {});
+    }, 5000);
+
+    return () => clearTimeout(timer);
+  }, [slug]);
+
   if (missing) notFound();
   if (!post) return <PageSkeleton />;
 
