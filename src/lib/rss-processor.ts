@@ -130,17 +130,33 @@ const GEMINI_FALLBACKS = [
   "gemini-3.5-flash",
   "gemini-2.5-flash",
   "gemini-flash-latest",
+  // Measured: when every model above is quota-exhausted, these still answer —
+  // the preview and "lite" tiers draw on separate free-tier pools. Each was
+  // checked against a real article prompt and returns complete, parseable JSON
+  // (~790-800 words), so falling this far still ships a publishable post.
+  "gemini-3-flash-preview",
+  "gemini-flash-lite-latest",
+  "gemini-3.5-flash-lite",
   "gemini-2.5-flash-lite",
 ];
 
-/** 429 = quota, 5xx = transient. Both are worth another attempt; 400/404 aren't. */
 export class AiHttpError extends Error {
   constructor(public status: number, message: string) {
     super(message);
     this.name = "AiHttpError";
   }
-  get retryable() {
-    return this.status === 429 || this.status >= 500;
+
+  /**
+   * Worth retrying THE SAME model after a short backoff.
+   *
+   * 5xx ("model is experiencing high demand") clears in seconds. A 429 does not:
+   * it's the daily free-tier quota, which resets at midnight Pacific — sleeping
+   * six seconds and asking again just burns time and rate limit. So a 429 is not
+   * retryable on the same model, but it IS worth moving to the next model, since
+   * the preview and lite tiers have separate quota pools.
+   */
+  get retryableSameModel() {
+    return this.status >= 500;
   }
 }
 
@@ -171,9 +187,11 @@ export async function callAi(settings: AiSettings, prompt: string): Promise<stri
         lastErr = new Error("AI returned an empty response");
       } catch (e) {
         lastErr = e;
-        // A 400/404 means this model is wrong, not busy — move to the next one
-        // immediately instead of burning retries on it.
-        if (e instanceof AiHttpError && !e.retryable) break;
+        // Quota exhaustion and bad model names don't improve by waiting. Move
+        // straight to the next model — with 7 models in the chain, retrying each
+        // one three times would otherwise add over a minute of pure sleeping
+        // before reaching the tier that still has quota.
+        if (e instanceof AiHttpError && !e.retryableSameModel) break;
       }
       await sleep(1500 * 2 ** attempt); // 1.5s, 3s, 6s
     }
