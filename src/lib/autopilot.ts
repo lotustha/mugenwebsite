@@ -13,7 +13,7 @@
  */
 
 import { prisma } from "@/lib/prisma";
-import { callAi, downloadAndStoreImage, type AiSettings } from "@/lib/rss-processor";
+import { callAi, callAiVerbose, downloadAndStoreImage, type AiSettings } from "@/lib/rss-processor";
 import { createPostFromAi, slugify } from "@/lib/post-creator";
 import { findVideo, embedHtml } from "@/lib/youtube";
 import { scoreTopics, pickTopic } from "@/lib/autopilot-scoring";
@@ -238,6 +238,11 @@ export interface GenerateOptions {
 export async function generatePost(opts: GenerateOptions): Promise<AutopilotResult> {
   const trigger = opts.trigger ?? "cron";
   let topicRow: { id: string; name: string; promptHint: string; category: string } | null = null;
+  // Which model actually answered — not necessarily the configured one, since
+  // the fallback chain drops to another tier when quota runs out. Recording the
+  // configured name would misattribute every fallback run, exactly when output
+  // quality dips and an admin most needs to know a smaller model wrote it.
+  let modelUsed: string | null = opts.aiSettings.model ?? null;
 
   try {
     // 1. Choose the topic. Scoring runs on every generation so the weights shown
@@ -288,12 +293,14 @@ export async function generatePost(opts: GenerateOptions): Promise<AutopilotResu
     const categories = await prisma.category.findMany({ select: { name: true } });
     const catNames = categories.map((c) => c.name);
 
-    let article = parseJson<GeneratedPost>(
-      await callAi(
-        opts.aiSettings,
-        ARTICLE_PROMPT(idea.angle, idea.workingTitle, topicRow.name, catNames, animeContext),
-      ),
+    // The article call is the one whose model determines output quality, so that
+    // is the model recorded in the run history.
+    const written = await callAiVerbose(
+      opts.aiSettings,
+      ARTICLE_PROMPT(idea.angle, idea.workingTitle, topicRow.name, catNames, animeContext),
     );
+    modelUsed = written.model;
+    let article = parseJson<GeneratedPost>(written.text);
 
     // One re-roll if the model landed on something we've effectively published.
     if (tooSimilar(article.title, recentTitles)) {
@@ -303,12 +310,12 @@ export async function generatePost(opts: GenerateOptions): Promise<AutopilotResu
           IDEATION_PROMPT(topicRow.name, topicRow.promptHint, [...recentTitles, article.title], animeContext),
         ),
       );
-      article = parseJson<GeneratedPost>(
-        await callAi(
-          opts.aiSettings,
-          ARTICLE_PROMPT(retryIdea.angle, retryIdea.workingTitle, topicRow.name, catNames, animeContext),
-        ),
+      const rewritten = await callAiVerbose(
+        opts.aiSettings,
+        ARTICLE_PROMPT(retryIdea.angle, retryIdea.workingTitle, topicRow.name, catNames, animeContext),
       );
+      modelUsed = rewritten.model;
+      article = parseJson<GeneratedPost>(rewritten.text);
     }
 
     if (!article.title?.trim() || !article.contentHtml?.trim()) {
@@ -370,7 +377,7 @@ export async function generatePost(opts: GenerateOptions): Promise<AutopilotResu
         status: "ok",
         title: post.title,
         videoId: video?.id ?? null,
-        model: opts.aiSettings.model || null,
+        model: modelUsed,
         trigger,
       },
     });
@@ -381,7 +388,7 @@ export async function generatePost(opts: GenerateOptions): Promise<AutopilotResu
       title: post.title,
       topic: topicRow.name,
       videoId: video?.id,
-      model: opts.aiSettings.model,
+      model: modelUsed ?? undefined,
     };
   } catch (e) {
     const error = e instanceof Error ? e.message : String(e);
@@ -394,7 +401,7 @@ export async function generatePost(opts: GenerateOptions): Promise<AutopilotResu
           topicId: topicRow?.id ?? null,
           status: "error",
           errorMsg: error.slice(0, 500),
-          model: opts.aiSettings.model || null,
+          model: modelUsed,
           trigger,
         },
       })

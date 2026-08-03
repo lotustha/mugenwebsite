@@ -36,6 +36,7 @@ interface RunRow {
   title: string | null;
   topic: string | null;
   videoId: string | null;
+  model: string | null;
   errorMsg: string | null;
   trigger: string;
   createdAt: string;
@@ -466,6 +467,17 @@ export default function AutopilotPage() {
                 )}
                 {h.videoId && (
                   <span className="font-body text-[10px]" style={{ color: "#c4b5fd" }}>video</span>
+                )}
+                {/* The model that actually wrote it — often a fallback tier once
+                    the day's quota on the preferred model is gone. */}
+                {h.model && (
+                  <span
+                    className="font-body text-[10px]"
+                    style={{ color: "rgba(255,255,255,0.3)" }}
+                    title="Model that produced this article"
+                  >
+                    {h.model.replace(/^gemini-/, "")}
+                  </span>
                 )}
                 {h.views !== null && (
                   <span className="font-body text-[10px] tabular-nums" style={{ color: "rgba(255,255,255,0.35)" }}>

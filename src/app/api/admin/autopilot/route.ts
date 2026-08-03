@@ -109,6 +109,7 @@ export async function GET() {
         title: h.title,
         topic: h.topic?.name ?? null,
         videoId: h.videoId,
+        model: h.model,
         errorMsg: h.errorMsg,
         trigger: h.trigger,
         createdAt: h.createdAt,

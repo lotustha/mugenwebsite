@@ -169,6 +169,22 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
  * on a once-a-day generator that means losing the whole day's post.
  */
 export async function callAi(settings: AiSettings, prompt: string): Promise<string> {
+  return (await callAiVerbose(settings, prompt)).text;
+}
+
+/**
+ * Same as callAi, but also reports WHICH model actually produced the text.
+ *
+ * Worth knowing: with fallback across seven models, the configured model is
+ * frequently not the one that answered. Recording the configured name in the run
+ * history would misattribute every fallback generation — and it would do so
+ * exactly when output quality dips, which is when an admin most needs to know a
+ * smaller model wrote the post.
+ */
+export async function callAiVerbose(
+  settings: AiSettings,
+  prompt: string,
+): Promise<{ text: string; model: string }> {
   // For Gemini, walk the fallback chain: configured model first (if it isn't
   // already in the list), then progressively cheaper ones.
   const models =
@@ -182,7 +198,7 @@ export async function callAi(settings: AiSettings, prompt: string): Promise<stri
     for (let attempt = 0; attempt < 3; attempt++) {
       try {
         const out = await callAiOnce({ ...settings, model }, prompt);
-        if (out?.trim()) return out;
+        if (out?.trim()) return { text: out, model };
         // Empty body with a 200 — transient; retry the same model.
         lastErr = new Error("AI returned an empty response");
       } catch (e) {
