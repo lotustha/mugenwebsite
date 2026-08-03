@@ -263,10 +263,10 @@ export async function generatePost(opts: GenerateOptions): Promise<AutopilotResu
     //    an anime poster is the fallback. Both are copied to local storage so
     //    posts don't break when a remote host disappears.
     let featuredImage: string | null = null;
-    if (video) featuredImage = await downloadAndStoreImage(video.thumbnail);
+    if (video) featuredImage = await downloadAndStoreImage(video.thumbnail, "ai");
     if (!featuredImage) {
       const poster = await findAnimePoster(article.imageQuery || article.title);
-      if (poster) featuredImage = await downloadAndStoreImage(poster);
+      if (poster) featuredImage = await downloadAndStoreImage(poster, "ai");
     }
 
     // 6. Assemble the body: takeaways → article → video embed.

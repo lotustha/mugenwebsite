@@ -55,7 +55,7 @@ function extractImagesFromHtml(html: string): string[] {
 }
 
 // ─── Image download → local storage ──────────────────────────────────────────
-export async function downloadAndStoreImage(imageUrl: string): Promise<string | null> {
+export async function downloadAndStoreImage(imageUrl: string, folder = "rss"): Promise<string | null> {
   try {
     const res = await fetch(imageUrl, {
       headers: { "User-Agent": "MugenAnime-Bot/1.0" },
@@ -72,7 +72,7 @@ export async function downloadAndStoreImage(imageUrl: string): Promise<string | 
 
     const { url } = await saveBuffer({
       buffer: Buffer.from(arrayBuffer),
-      folder: "rss",
+      folder,
       ext,
     });
     return url;
